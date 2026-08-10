@@ -98,6 +98,15 @@ export default function RankedPlayScreen() {
       setElapsedSec(0)
       setPhase('searching')
 
+      const handleMatched = async (matchedRoomId: string) => {
+        const { data: stateData } = await invokeEdgeFunction('get-game-state', {
+          body: { room_id: matchedRoomId },
+        })
+        if (stateData?.data) {
+          await enterMatch(matchedRoomId, stateData.data.game_id, capacity)
+        }
+      }
+
       // Subscribe to my own queue row — the match may form later when
       // someone else queues for the same party size (spec Req 3.4).
       const channel = supabase
@@ -108,17 +117,30 @@ export default function RankedPlayScreen() {
           async (payload) => {
             const row = payload.new as { status: string; matched_room_id: string | null }
             if (row.status === 'MATCHED' && row.matched_room_id) {
-              const { data: stateData } = await invokeEdgeFunction('get-game-state', {
-                body: { room_id: row.matched_room_id },
-              })
-              if (stateData?.data) {
-                await enterMatch(row.matched_room_id, stateData.data.game_id, capacity)
-              }
+              await handleMatched(row.matched_room_id)
             }
           }
         )
         .subscribe()
       queueChannelRef.current = channel
+
+      // Reconcile once the subscription is actually live: another player
+      // could match with us in the gap between "our own join-queue response
+      // said not matched yet" and "our Realtime subscription is established"
+      // (subscribe() is async — establishing the WebSocket takes real time).
+      // A row update that lands in that gap fires into nothing and this
+      // screen waits forever, exactly like the private-room lobby bug
+      // fixed earlier this session for the same underlying reason (Realtime
+      // only delivers changes that happen strictly after subscription).
+      // One direct read of our own row closes the gap.
+      const { data: currentRow } = await supabase
+        .from('matchmaking_queue')
+        .select('status, matched_room_id')
+        .eq('id', queueId)
+        .maybeSingle()
+      if (currentRow?.status === 'MATCHED' && currentRow.matched_room_id) {
+        await handleMatched(currentRow.matched_room_id)
+      }
     } catch {
       setError('Network error — please try again')
     } finally {
