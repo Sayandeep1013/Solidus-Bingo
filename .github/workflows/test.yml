@@ -1,7 +1,8 @@
 # .github/workflows/test.yml
 #
 # Solidus Bingo CI Pipeline
-# Runs on every push and PR to main and develop.
+# Runs on every push to main, develop, or a feature/* branch, and on PRs
+# targeting main or develop.
 #
 # Job order (spec bingo-testing Req 10.2):
 #   1. lint         — tsc + ESLint
@@ -16,17 +17,18 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'feature/**']
   pull_request:
     branches: [main, develop]
 
 env:
   # Increase PBT runs in CI for more thorough property checking
   FC_NUM_RUNS: 200
-  # Supabase local URL for integration tests
+  # Supabase local URL for integration tests. ANON_KEY/SERVICE_ROLE_KEY are
+  # NOT secrets here — they're captured fresh from each run's own local
+  # `supabase start` instance (see test-integration job) rather than stored
+  # as repo secrets, so there's nothing to configure by hand.
   SUPABASE_URL: http://localhost:54321
-  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_LOCAL_ANON_KEY }}
-  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_LOCAL_SERVICE_ROLE_KEY }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
@@ -147,31 +149,37 @@ jobs:
       - name: Start Supabase
         run: supabase start
         timeout-minutes: 3
+        # `supabase start` itself blocks until every container (including the
+        # API gateway) reports healthy before returning, so a separate polling
+        # health-check step is redundant here — if this step exits 0, the
+        # stack is genuinely ready.
 
-      # Spec Req 10.7 — fail with explicit error if Supabase doesn't start in 120s
-      - name: Wait for Supabase health check
+      # Every `supabase start` mints its own local ANON_KEY/SERVICE_ROLE_KEY
+      # (derived from config.toml's fixed local JWT secret) — capture them
+      # here rather than relying on repo secrets that would need manual setup.
+      - name: Export local Supabase credentials
         run: |
-          for i in $(seq 1 24); do
-            if curl -sf http://localhost:54321/rest/v1/ -H "apikey: $SUPABASE_ANON_KEY" > /dev/null 2>&1; then
-              echo "Supabase is healthy"
-              exit 0
-            fi
-            echo "Waiting for Supabase... ($i/24)"
-            sleep 5
-          done
-          echo "ERROR: Supabase did not become healthy within 120 seconds"
-          exit 1
+          ANON_KEY=$(supabase status -o json | jq -r '.ANON_KEY')
+          SERVICE_ROLE_KEY=$(supabase status -o json | jq -r '.SERVICE_ROLE_KEY')
+          echo "SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
 
       - name: Apply migrations
         run: supabase db push
 
-      # Spec bingo-testing Req 11 — secret scan before integration tests
+      # Spec bingo-testing Req 11 — secret scan before integration tests.
+      # Scans the actual exported bundle files, not the export command's log
+      # output — the JS bundle is written to disk, never printed to stdout,
+      # so grepping the command's output alone would never catch anything.
       - name: Secret leak scan
         run: |
-          npx expo export --platform android --dev false 2>&1 | \
-            grep -iE "service_role|client_secret|SUPABASE_SERVICE_ROLE|GOOGLE_CLIENT_SECRET" && \
-            { echo "SECRET LEAK DETECTED in bundle — aborting"; exit 1; } || \
-            echo "Secret scan passed"
+          npx expo export --platform android --output-dir /tmp/export-scan
+          if grep -raoE "service_role|client_secret|SUPABASE_SERVICE_ROLE|GOOGLE_CLIENT_SECRET" /tmp/export-scan/_expo/static/js/android/*.hbc; then
+            echo "SECRET LEAK DETECTED in exported bundle — aborting"
+            exit 1
+          fi
+          echo "Secret scan passed"
+          rm -rf /tmp/export-scan
         continue-on-error: false
 
       - name: Run integration tests
