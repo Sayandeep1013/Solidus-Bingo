@@ -9,9 +9,10 @@
  * confused with multiplayer/ranked state (which is what the Leaderboard's
  * anti-manipulation guarantee depends on).
  *
- * Mirrors the exact win rule used server-side by supabase/functions/call-number:
- * the winner is whoever CALLED the number that pushed any player to 5 lines,
- * not necessarily the player whose own board completed a line.
+ * Mirrors the exact win rule used server-side by supabase/functions/call-number
+ * (via _shared/resolveCall.ts): the winner is the player whose own board
+ * reached 5 lines, whoever called the number that got them there; a call that
+ * pushes two players to 5 at once goes to the caller.
  */
 import { create } from 'zustand'
 import {
@@ -138,17 +139,22 @@ export const useBotGameStore = create<BotGameState>()((set, get) => ({
       scoreMap[line.playerId] = (scoreMap[line.playerId] ?? 0) + 1
     }
 
-    const winnerExists = Object.values(scoreMap).some((s) => s >= 5)
+    // Winner = whoever's own board reached 5 lines, with the caller winning a
+    // tie — mirrors resolveCall's win check exactly (spec bingo-game-mechanics
+    // §4.3–4.4). Calls are cut on every board at once, so the bot calling the
+    // number that completes YOUR fifth line must not hand the bot the win.
+    const winners = [...state.players]
+      .sort((a, b) => a.turnOrder - b.turnOrder)
+      .filter((p) => (scoreMap[p.playerId] ?? 0) >= 5)
+      .map((p) => p.playerId)
 
-    if (winnerExists) {
-      // Winner = the calling player, captured before clearing active turn —
-      // matches call-number's Win Path ordering exactly.
+    if (winners.length > 0) {
       set({
         calledNumbers: [...state.calledNumbers, num],
         completedLines: [...state.completedLines, ...newlyCompleted],
         scoreMap,
         activePlayerId: null,
-        winnerId: callerId,
+        winnerId: winners.includes(callerId) ? callerId : winners[0],
         winningCall: num,
         status: 'FINISHED',
       })

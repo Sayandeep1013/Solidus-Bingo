@@ -23,7 +23,6 @@ import React, {
   useState,
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import * as SplashScreen from 'expo-splash-screen'
 import { supabase } from '../lib/supabaseClient'
 import { invokeEdgeFunction } from '../lib/invokeEdgeFunction'
 import { signInWithGoogle, signOut as authSignOut } from '../lib/auth'
@@ -46,18 +45,10 @@ const SESSION_RESTORE_TIMEOUT_MS = 5_000
 /** Max retries for profile load after OAuth (spec req 12.6) */
 const PROFILE_LOAD_MAX_RETRIES = 3
 
-// A returning user with a cached session resolves in a handful of
-// milliseconds — without a floor, the splash reads as a flicker instead of
-// a masthead. Hold it visible for at least this long from app start.
-const MIN_SPLASH_VISIBLE_MS = 900
-const appStartedAt = Date.now()
-
-function hideSplashScreen() {
-  const remaining = MIN_SPLASH_VISIBLE_MS - (Date.now() - appStartedAt)
-  setTimeout(() => {
-    SplashScreen.hideAsync().catch(() => {})
-  }, Math.max(0, remaining))
-}
+// The splash is no longer this file's concern: `isLoading` is what the root
+// layout hands to <AppSplash />, which owns both the native splash's dismissal
+// and its own minimum on-screen time. Setting isLoading is all that's needed
+// here — every path below must still set it exactly once.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider
@@ -151,19 +142,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setTimeout(() => {
               loadProfile(newSession.user.id).finally(() => {
                 setIsLoading(false)
-                hideSplashScreen()
               })
             }, 0)
           } else {
             setIsLoading(false)
-            hideSplashScreen()
           }
         } else if (event === 'SIGNED_OUT') {
           setSession(null)
           setProfile(null)
           setAuthError(null)
           setIsLoading(false)
-          hideSplashScreen()
         }
       }
     )
@@ -172,7 +160,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // cold start with no stored session), unblock the UI (spec req 5.9).
     const timeoutId = setTimeout(() => {
       setIsLoading(false)
-      hideSplashScreen()
     }, SESSION_RESTORE_TIMEOUT_MS)
 
     return () => {

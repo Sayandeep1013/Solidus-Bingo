@@ -349,20 +349,19 @@ describe('PBT — Win Condition Invariants', () => {
     )
   })
 
-  // Req 3.15 — Winner is caller (structural: findWinner returns based on scores, caller declared by EF)
-  test('Req 3.15 — winner-is-caller invariant: checkWinCondition finds any player with score >= 5', () => {
+  // Req 3.15 — checkWinCondition is score-only: it must report a win no matter
+  // whose board reached 5. Naming the winner among them is resolveCall's job.
+  test('Req 3.15 — checkWinCondition finds any player with score >= 5, caller or not', () => {
     fc.assert(
       fc.property(
         fc.integer({ min: 0, max: 4 }),   // calling player index
         fc.integer({ min: 2, max: 4 }),   // number of players
         (callerIdx, n) => {
           const clampedIdx = callerIdx % n
-          // Simulate: non-caller reaches 5 first; caller is still declared winner per spec
+          // Simulate: a non-caller is the one who reached 5
           const scores = new Map(
             Array.from({ length: n }, (_, i) => [`p${i}`, i === (clampedIdx + 1) % n ? 5 : 3])
           )
-          // checkWinCondition returns true (win exists)
-          // The Edge Function will record the CALLER (p{clampedIdx}) as winner_id regardless
           return checkWinCondition(scores) === true
         }
       ),

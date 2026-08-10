@@ -160,16 +160,15 @@ describe('checkWinCondition', () => {
     expect(checkWinCondition(scores)).toBe(false)
   })
 
-  // Req 2.17 — winner is always the calling player (checked at call-number level)
-  // This test verifies that checkWinCondition finds a winner regardless of WHICH
-  // player reached 5 (the caller is declared winner by the caller logic above this)
+  // Req 2.17 — checkWinCondition only answers "did anyone reach 5?"; WHICH of
+  // them is the winner is resolved by resolveCall/botGameStore (the player whose
+  // own board hit 5, caller breaking ties — bingo-game-mechanics §5.3–5.4).
   test('Req 2.17 — win detected on non-calling player board (5 lines on any player)', () => {
     // Scenario: calling player has 3 lines, but their call triggers 5 on opponent
     const scores = new Map([
       ['caller', 3],
       ['opponent', 5], // opponent reached 5 due to caller's number
     ])
-    // checkWinCondition should return true — caller is declared winner by Edge Function
     expect(checkWinCondition(scores)).toBe(true)
   })
 

@@ -290,17 +290,41 @@ export async function resolveCall(
   }
 
   // ── Win check ─────────────────────────────────────────────────────────────
-  const winnerExists = Object.values(updatedScores).some((s) => s >= 5)
+  // The winner is the player whose own board reached 5 lines — NOT whoever
+  // happened to call the number (spec bingo-game-mechanics §4.3–4.4). Every
+  // call is cut on every board simultaneously, so a call routinely completes
+  // an opponent's board; the old caller-wins rule then produced results like
+  // "Bot Ada wins — You: 5 lines, Bot Ada: 3 lines".
+  //
+  // Tie-break, for the rare call that pushes two players to 5 at once: the
+  // caller wins if they are one of them, otherwise the lowest turn_order does.
+  // Both branches are pure functions of this call's inputs, so replaying the
+  // same call always names the same winner.
+  //
+  // is_out players are excluded. Boards are scored for everyone regardless of
+  // whether that seat has forfeited or timed out, so a player who has left can
+  // and does keep completing lines — under the old caller-wins rule that could
+  // never name them the winner (the caller is by definition still in), and it
+  // must not start doing so now.
+  const winners = (gamePlayers ?? [])
+    .filter(
+      (gp: { player_id: string; is_out?: boolean }) =>
+        !gp.is_out && (updatedScores[gp.player_id] ?? 0) >= 5
+    )
+    .sort((a: { turn_order: number }, b: { turn_order: number }) => a.turn_order - b.turn_order)
+    .map((gp: { player_id: string }) => gp.player_id)
 
-  if (winnerExists) {
-    // Win Path — CRITICAL ordering (spec bingo-game-mechanics §4e):
-    const captured_winner_id = game.active_player_id // 1. capture FIRST
+  if (winners.length > 0) {
+    // Win Path — the winner is resolved BEFORE any UPDATE runs, so nulling
+    // active_player_id below can never corrupt the recorded winner
+    // (spec bingo-edge-functions §22a).
+    const captured_winner_id = winners.includes(callerId) ? callerId : winners[0]
 
     await admin
       .from('games')
       .update({
-        active_player_id: null,              // 2. null it second
-        winner_id: captured_winner_id,       // 3. set winner third
+        active_player_id: null,
+        winner_id: captured_winner_id,
         winning_call: calledNumber,
         status: 'FINISHED',
         finished_at: new Date().toISOString(),

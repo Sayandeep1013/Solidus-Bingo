@@ -2,7 +2,7 @@
  * app/index.tsx — Root index redirect
  *
  * Routes the user based on their auth state:
- *   - Loading → splash screen is still visible (held by SplashScreen.preventAutoHideAsync)
+ *   - Loading → <AppSplash /> covers this screen from the root layout
  *   - No session → /(auth)/login
  *   - Session + no username → /(auth)/profile-setup
  *   - Session + username → /(app)
@@ -16,7 +16,8 @@ export default function Index() {
   const { session, profile, isLoading } = useAuth()
 
   if (isLoading) {
-    // Native splash is still visible — render a blank screen underneath
+    // <AppSplash /> is drawn over this by the root layout; the matching paper
+    // fill just means nothing flashes through during its fade-out.
     return <View style={styles.blank} />
   }
 

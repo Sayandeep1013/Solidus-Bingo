@@ -35,6 +35,8 @@ export default function AppLayout() {
   const gameId = useGameStore((s) => s.gameId)
   useRealtimeChannel(roomId, gameId)
 
+  // Covered by the root layout's <AppSplash /> for exactly as long as this is
+  // true, so nothing is ever visibly blank here.
   if (isLoading) return null
 
   if (!session) return <Redirect href="/(auth)/login" />

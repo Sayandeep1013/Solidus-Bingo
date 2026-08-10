@@ -10,7 +10,7 @@ import { useAuth } from '@/context/AuthContext'
 export default function AuthLayout() {
   const { session, profile, isLoading } = useAuth()
 
-  // While restoring session, show nothing (root layout shows splash)
+  // While restoring the session the root layout's <AppSplash /> covers this.
   if (isLoading) return null
 
   // Fully authenticated with username → go to app
