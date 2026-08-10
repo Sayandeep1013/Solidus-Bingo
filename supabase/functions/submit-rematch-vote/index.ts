@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
   // ── Verify room state ─────────────────────────────────────────────────────
   const { data: room } = await admin
     .from('rooms')
-    .select('id, status, host_id, capacity')
+    .select('id, status, host_id, capacity, time_bank_ms')
     .eq('id', roomId)
     .single()
 
@@ -141,6 +141,11 @@ Deno.serve(async (req: Request) => {
   const firstPlayerIdx = Math.floor(Math.random() * n)
   const firstPlayerId = playerList[firstPlayerIdx].player_id
 
+  // turn_started_at seeds the chess clock for the first active player, same
+  // as start-game — omitting it (as this function used to) leaves it NULL
+  // forever, which the client reads as "no live clock" and just displays the
+  // frozen time_remaining_ms value instead.
+  const now = new Date().toISOString()
   const { data: newGame, error: newGameError } = await admin
     .from('games')
     .insert({
@@ -148,7 +153,8 @@ Deno.serve(async (req: Request) => {
       game_number: newGameNumber,
       status: 'ACTIVE',
       active_player_id: firstPlayerId,
-      started_at: new Date().toISOString(),
+      started_at: now,
+      turn_started_at: now,
     })
     .select('id')
     .single()
@@ -157,9 +163,16 @@ Deno.serve(async (req: Request) => {
     return err('INTERNAL_ERROR', 'Failed to start rematch game', 500)
   }
 
+  // time_remaining_ms defaults to 0 in the schema — omitting it here (as
+  // this function used to) meant every rematch started with every player's
+  // clock already at 0:00, letting the opponent claim an instant timeout win
+  // from turn one. Must seed it from the room's own time bank, same as
+  // start-game does for game 1.
+  const timeBankMs = room.time_bank_ms as number
   await admin.from('game_players').insert(
     playerList.map((p, i) => ({
       game_id: newGame.id, player_id: p.player_id, turn_order: i + 1, score: 0,
+      time_remaining_ms: timeBankMs,
     }))
   )
 
