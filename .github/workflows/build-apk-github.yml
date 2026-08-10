@@ -1,0 +1,135 @@
+# .github/workflows/build-apk-github.yml
+#
+# Builds a signed, installable release APK entirely on GitHub's own Linux
+# runners — Gradle compiles here, nothing is sent to EAS. Publishes the APK
+# as a GitHub Release asset.
+#
+# Why this exists alongside release-apk.yml: that one calls `eas build`, which
+# ships the job to Expo's cloud and waits in their queue (and consumes EAS
+# build quota). This repo is public, so GitHub Actions minutes are unlimited
+# and free — building here removes both the queue wait and the quota.
+# release-apk.yml is kept as a fallback.
+#
+# Triggers:
+#   - Manual: Actions tab -> Build APK (GitHub) -> Run workflow
+#   - Push a tag matching v* (e.g. `git tag v1.0.1 && git push origin v1.0.1`)
+#
+# Required repo secrets:
+#   ANDROID_KEYSTORE_BASE64    - base64 of the PKCS12 release keystore
+#   ANDROID_KEYSTORE_PASSWORD  - store password
+#   ANDROID_KEY_ALIAS          - key alias inside the keystore
+#   ANDROID_KEY_PASSWORD       - key password (same as store password for PKCS12)
+
+name: Build APK (GitHub)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build signed APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to create the Release and upload the APK
+    env:
+      # Inlined into the JS bundle at build time. Gradle does not read
+      # eas.json, so the values that the EAS profiles set via their "env"
+      # block have to be provided here too, or the APK ships with no backend
+      # connection at all. These are the client-facing anon credentials —
+      # public by design, already committed in eas.json.
+      EXPO_PUBLIC_SUPABASE_URL: https://jvediwzzvcqttnwdgsry.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2ZWRpd3p6dmNxdHRud2Rnc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMjQyODIsImV4cCI6MjEwMTgwMDI4Mn0.ioL2w5WMVvAV_RBYXcUOlp9W4etGZm_TUiTnf76ViDA
+      # EXPO_PUBLIC_ENABLE_TEST_LOGIN is deliberately NOT set — the "Dev Test
+      # Login" bypass must never ship in a build a real player installs.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --clean
+
+      # Must run after every prebuild — see the script's header for why the
+      # Expo template would otherwise debug-sign the release APK.
+      - name: Inject release signing config
+        run: node scripts/inject-android-signing.mjs
+
+      - name: Decode release keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.p12
+          # Fail early and clearly if the secret was missing/malformed, rather
+          # than letting Gradle fail later with an opaque keystore error.
+          if [ ! -s android/app/release.p12 ]; then
+            echo "ERROR: decoded keystore is empty — is ANDROID_KEYSTORE_BASE64 set?"
+            exit 1
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: release.p12
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      # Confirms the APK is signed with the release key and not the debug key.
+      # A debug-signed "release" APK installs fine and looks correct, so this
+      # is checked explicitly rather than assumed.
+      - name: Verify APK signature
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          ls -la "$APK"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            echo "ERROR: APK is DEBUG-signed — release signing config was not applied."
+            exit 1
+          fi
+          echo "APK is release-signed."
+
+      - name: Stage APK for upload
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "solidus-bingo-v${VERSION}-${{ github.run_number }}.apk"
+          echo "APK_NAME=solidus-bingo-v${VERSION}-${{ github.run_number }}.apk" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      # Also attached as a plain workflow artifact so a build is downloadable
+      # even if the Release step is skipped or fails.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}
+          path: ${{ env.APK_NAME }}
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+          name: "Solidus Bingo v${{ env.APP_VERSION }} (build ${{ github.run_number }})"
+          files: ${{ env.APK_NAME }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

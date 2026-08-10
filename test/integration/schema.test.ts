@@ -280,18 +280,27 @@ describe('RLS Policy Tests', () => {
 
   // Req 6.26 — profile deletion cascades to room_players
   test('Req 6.26 — deleting a profile cascades to room_players', async () => {
-    const u = await createTestUser(`cascade-test-${Date.now()}@test.com`)
-    const rId = await createTestRoom(u.id, 'CASCD2')
+    // The host and the member being deleted MUST be different users.
+    // rooms.host_id is ON DELETE RESTRICT while room_players.player_id is
+    // ON DELETE CASCADE — so if the deleted user also hosts the room, the
+    // RESTRICT refuses the delete outright and the cascade under test never
+    // runs (which is what Req 6.28 below deliberately verifies instead).
+    const host = await createTestUser(`cascade-host-${Date.now()}@test.com`)
+    const member = await createTestUser(`cascade-member-${Date.now()}@test.com`)
+    const rId = await createTestRoom(host.id, 'CASCD2')
 
     await admin.from('room_players').insert({
-      room_id: rId, player_id: u.id, join_order: 1, status: 'ACTIVE',
+      room_id: rId, player_id: member.id, join_order: 1, status: 'ACTIVE',
     })
 
-    // Delete user — should cascade to profiles → room_players
-    await admin.auth.admin.deleteUser(u.id)
+    // Delete the member — should cascade auth.users → profiles → room_players.
+    // Asserted rather than discarded: swallowing this error is exactly what
+    // hid the host/member collision that used to make this test fail.
+    const { error: deleteError } = await admin.auth.admin.deleteUser(member.id)
+    expect(deleteError).toBeNull()
 
     const { data } = await admin.from('room_players')
-      .select('id').eq('player_id', u.id)
+      .select('id').eq('player_id', member.id)
 
     expect(data).toHaveLength(0)
   })

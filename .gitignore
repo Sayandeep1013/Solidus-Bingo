@@ -41,3 +41,4 @@ Thumbs.db
 # --- Jest / Coverage ---
 coverage/
 junit.xml
+*.pem
