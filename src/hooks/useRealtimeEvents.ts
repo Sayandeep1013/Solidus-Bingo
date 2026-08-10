@@ -92,6 +92,19 @@ export function useRealtimeEvents(gameId: string | null) {
             joinOrder: record.join_order,
             isOnline: true,
           })
+          // room_players carries no username (profiles is a separate table) —
+          // resolve it in the background and patch the store once known,
+          // rather than leaving the slot showing "Loading…" forever.
+          supabase
+            .from('profiles')
+            .select('username')
+            .eq('id', record.player_id)
+            .single()
+            .then(({ data }) => {
+              if (data?.username) {
+                useRoomStore.getState().updatePlayer(record.player_id, { username: data.username })
+              }
+            })
         } else {
           useRoomStore.getState().updatePlayer(record.player_id, { isOnline: false })
         }

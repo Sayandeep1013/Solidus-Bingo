@@ -111,11 +111,33 @@ Deno.serve(async (req: Request) => {
     return err('INTERNAL_ERROR', 'Failed to add host to room', 500)
   }
 
+  // Bug fix: the client's Realtime subscription only starts AFTER it
+  // receives this response and sets roomStore.roomId — it can never
+  // receive a Realtime event for a row that was already inserted before
+  // that (Realtime only pushes changes that happen after subscription).
+  // Without returning the initial roster here, the host's own lobby slot
+  // (and, for join-room, every already-present player's slot) would show
+  // "Waiting..." forever. Return the current roster so the client can
+  // seed roomStore directly instead of relying solely on future events.
+  const { data: playersData } = await admin
+    .from('room_players')
+    .select('player_id, join_order, profiles(username)')
+    .eq('room_id', room.id)
+    .eq('status', 'ACTIVE')
+    .order('join_order', { ascending: true })
+
+  const players = (playersData ?? []).map((p) => ({
+    player_id: p.player_id,
+    username: (p.profiles as unknown as { username: string | null } | null)?.username ?? null,
+    join_order: p.join_order,
+  }))
+
   return ok({
     room_id: room.id,
     code: room.code,
     capacity: room.capacity,
     host_id: room.host_id,
     status: room.status,
+    players,
   })
 })

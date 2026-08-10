@@ -124,6 +124,24 @@ Deno.serve(async (req: Request) => {
     if (!updateError) newStatus = 'FULL'
   }
 
+  // Bug fix: see create-room's identical comment — the joining client's
+  // Realtime subscription starts after this response, so it would never
+  // see the Realtime INSERT events for players who joined before it did.
+  // Return the full current roster so the client can seed roomStore with
+  // everyone already present, not just itself.
+  const { data: playersData } = await admin
+    .from('room_players')
+    .select('player_id, join_order, profiles(username)')
+    .eq('room_id', room.id)
+    .eq('status', 'ACTIVE')
+    .order('join_order', { ascending: true })
+
+  const players = (playersData ?? []).map((p) => ({
+    player_id: p.player_id,
+    username: (p.profiles as unknown as { username: string | null } | null)?.username ?? null,
+    join_order: p.join_order,
+  }))
+
   return ok({
     room_id: room.id,
     code: room.code,
@@ -131,5 +149,6 @@ Deno.serve(async (req: Request) => {
     host_id: room.host_id,
     status: newStatus,
     join_order: joinOrder,
+    players,
   })
 })

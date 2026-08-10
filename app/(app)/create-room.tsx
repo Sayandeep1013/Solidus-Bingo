@@ -45,7 +45,12 @@ export default function CreateRoomScreen() {
         capacity: room.capacity,
         roomStatus: room.status,
         hostId: room.host_id,
-        players: [],
+        players: (room.players ?? []).map((p: { player_id: string; username: string | null; join_order: number }) => ({
+          playerId: p.player_id,
+          username: p.username,
+          joinOrder: p.join_order,
+          isOnline: true,
+        })),
       })
 
       router.replace(`/(app)/lobby/${room.room_id}`)
