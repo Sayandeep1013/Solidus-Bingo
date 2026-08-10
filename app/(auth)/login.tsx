@@ -13,17 +13,14 @@
  *   - No error shown on cancel
  */
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
 import { Redirect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '@/context/AuthContext'
 import { signInWithTestAccount } from '@/lib/auth'
 import { TEST_LOGIN_ENABLED, TEST_ACCOUNTS, TEST_ACCOUNT_PASSWORD } from '@/lib/testAccounts'
+import { colors, fonts, spacing, KICKER_LETTER_SPACING } from '@/theme'
+import { Masthead, PaperBackground, NewsButton, Divider } from '@/components/news'
 
 const ERROR_MESSAGES: Record<string, string> = {
   GOOGLE_AUTH_FAILED:
@@ -69,147 +66,118 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Solidus Bingo</Text>
-        <Text style={styles.subtitle}>Real-time multiplayer bingo</Text>
-      </View>
+    <PaperBackground>
+      <View style={styles.container}>
+        <Masthead
+          kicker="Vol. I · No. 1"
+          title="Solidus Bingo"
+          tagline="Real-Time Multiplayer, Every Edition"
+        />
 
-      <View style={styles.body}>
-        {errorMessage ? (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.button, isLoading && styles.buttonDisabled]}
-          onPress={signIn}
-          disabled={isLoading}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with Google"
-          accessibilityState={{ disabled: isLoading }}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#1a1a2e" size="small" />
-          ) : (
-            <Text style={styles.buttonText}>Continue with Google</Text>
-          )}
-        </TouchableOpacity>
-
-        {TEST_LOGIN_ENABLED && (
-          <View style={styles.testLoginBox}>
-            <Text style={styles.testLoginLabel}>Dev Test Login (QA only)</Text>
-            {testLoginError ? <Text style={styles.errorText}>{testLoginError}</Text> : null}
-            <View style={styles.testLoginRow}>
-              {TEST_ACCOUNTS.map((acct) => (
-                <TouchableOpacity
-                  key={acct.email}
-                  style={styles.testLoginButton}
-                  onPress={() => handleTestLogin(acct.email)}
-                  disabled={testLoginBusy !== null}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Test Login ${acct.username}`}
-                >
-                  {testLoginBusy === acct.email ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
-                  ) : (
-                    <Text style={styles.testLoginButtonText}>{acct.username}</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+        <View style={styles.body}>
+          {errorMessage ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={colors.accent} />
+              <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
-          </View>
-        )}
+          ) : null}
+
+          <NewsButton
+            label="Continue with Google"
+            onPress={signIn}
+            variant="primary"
+            icon="logo-google"
+            IconComponent={Ionicons}
+            loading={isLoading}
+          />
+
+          {TEST_LOGIN_ENABLED && (
+            <View style={styles.testLoginBox}>
+              <Divider />
+              <Text style={styles.testLoginLabel}>Dev Test Login — QA Only</Text>
+              {testLoginError ? <Text style={styles.errorText}>{testLoginError}</Text> : null}
+              <View style={styles.testLoginRow}>
+                {TEST_ACCOUNTS.map((acct) => (
+                  <TouchableOpacity
+                    key={acct.email}
+                    style={styles.testLoginButton}
+                    onPress={() => handleTestLogin(acct.email)}
+                    disabled={testLoginBusy !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Test Login ${acct.username}`}
+                  >
+                    {testLoginBusy === acct.email ? (
+                      <ActivityIndicator color={colors.ink} size="small" />
+                    ) : (
+                      <Text style={styles.testLoginButtonText}>{acct.username}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
     paddingHorizontal: 24,
     justifyContent: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#888888',
+    gap: spacing.xl,
   },
   body: {
-    gap: 16,
+    gap: spacing.md,
   },
   errorBanner: {
-    backgroundColor: '#3d1a1a',
-    borderRadius: 8,
-    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.paperMuted,
     borderWidth: 1,
-    borderColor: '#7a2020',
+    borderColor: colors.accent,
+    padding: 12,
   },
   errorText: {
-    color: '#ff6b6b',
+    color: colors.accent,
+    fontFamily: fonts.body,
     fontSize: 14,
     textAlign: 'center',
-  },
-  button: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#1a1a2e',
-    fontSize: 16,
-    fontWeight: '600',
+    flex: 1,
   },
   testLoginBox: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#3a3a55',
-    gap: 8,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   testLoginLabel: {
-    color: '#666666',
-    fontSize: 12,
-    textTransform: 'uppercase',
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    letterSpacing: KICKER_LETTER_SPACING,
+    color: colors.inkFaded,
     textAlign: 'center',
+    marginTop: spacing.xs,
   },
   testLoginRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
     justifyContent: 'center',
   },
   testLoginButton: {
-    backgroundColor: '#2a2a40',
-    borderRadius: 8,
+    backgroundColor: colors.paperMuted,
+    borderWidth: 1,
+    borderColor: colors.rule,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: '#3a3a55',
     minWidth: 70,
     alignItems: 'center',
   },
   testLoginButtonText: {
-    color: '#ffffff',
+    fontFamily: fonts.bodyBold,
+    color: colors.ink,
     fontSize: 13,
-    fontWeight: '600',
   },
 })

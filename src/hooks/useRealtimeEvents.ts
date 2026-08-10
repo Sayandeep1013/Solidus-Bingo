@@ -30,7 +30,7 @@ import type { LineId } from '../lib/gameEngine'
 
 type TableName =
   | 'rooms' | 'room_players' | 'games' | 'game_players'
-  | 'game_calls' | 'game_completed_lines' | 'rematch_votes'
+  | 'game_calls' | 'game_completed_lines' | 'rematch_votes' | 'forfeit_votes' | 'forfeit_vote_ballots'
   | 'presence_sync' | 'presence_join' | 'presence_leave'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +44,13 @@ export function useRealtimeEvents(gameId: string | null) {
   // ── Snapshot fetch (called on every reconnect, and whenever a 'games' event
   // introduces a game_id the store doesn't have loaded yet — e.g. right after
   // Start Game, or when a rematch creates a new game) ───────────────────────
+  //
+  // start-game's games/game_players/game_boards inserts are separate
+  // sequential statements, not one transaction — so a Realtime 'games'
+  // INSERT can (rarely) reach this client and trigger this fetch before the
+  // later game_boards row for THIS player has actually committed. Rather
+  // than silently rendering an empty board (an ACTIVE game whose own board
+  // never arrives), retry a few times with a short backoff before giving up.
   const fetchSnapshot = useCallback(async (explicitGameId?: string) => {
     const currentGameId = explicitGameId ?? gameIdRef.current
     if (!currentGameId) return
@@ -51,15 +58,26 @@ export function useRealtimeEvents(gameId: string | null) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const { data, error } = await invokeEdgeFunction('get-game-state', {
-      body: { game_id: currentGameId },
-    })
+    const MAX_ATTEMPTS = 4
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const { data, error } = await invokeEdgeFunction('get-game-state', {
+        body: { game_id: currentGameId },
+      })
 
-    if (error || !data?.data) {
-      throw new Error(error?.message ?? 'get-game-state returned no data')
+      if (error || !data?.data) {
+        throw new Error(error?.message ?? 'get-game-state returned no data')
+      }
+
+      const snapshot = data.data
+      const boardNotYetReady = snapshot.status === 'ACTIVE' && !snapshot.my_board
+      if (boardNotYetReady && attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * attempt))
+        continue
+      }
+
+      applyGameSnapshot(snapshot)
+      return
     }
-
-    applyGameSnapshot(data.data)
   }, []) // stable — reads from refs and .getState()
 
   // ── Main event dispatcher ─────────────────────────────────────────────────
@@ -116,7 +134,8 @@ export function useRealtimeEvents(gameId: string | null) {
         const record = (payload as {
           new?: {
             id: string; status: string; active_player_id: string | null;
-            winner_id: string | null; winning_call: number | null
+            winner_id: string | null; winning_call: number | null;
+            turn_started_at: string | null
           }
         }).new
         if (!record) break
@@ -136,7 +155,7 @@ export function useRealtimeEvents(gameId: string | null) {
           break
         }
 
-        useGameStore.getState().updateActivePlayer(record.active_player_id ?? null)
+        useGameStore.getState().updateActivePlayer(record.active_player_id ?? null, record.turn_started_at ?? null)
         useGameStore.getState().updateGameStatus(
           record.status as never,
           record.winner_id ?? null,
@@ -148,7 +167,10 @@ export function useRealtimeEvents(gameId: string | null) {
       // ── game_players UPDATE ─────────────────────────────────────────────
       case 'game_players': {
         const record = (payload as {
-          new?: { game_id: string; player_id: string; score: number }
+          new?: {
+            game_id: string; player_id: string; score: number; time_remaining_ms: number
+            is_out: boolean; bot_controlled: boolean
+          }
         }).new
         if (!record) break
         // These three tables have no room_id column, so the channel's
@@ -159,6 +181,15 @@ export function useRealtimeEvents(gameId: string | null) {
         // currently loaded.
         if (record.game_id !== useGameStore.getState().gameId) break
         useGameStore.getState().updateScore(record.player_id, record.score)
+        if (typeof record.time_remaining_ms === 'number') {
+          useGameStore.getState().updateTimeRemaining(record.player_id, record.time_remaining_ms)
+        }
+        if (typeof record.is_out === 'boolean') {
+          useGameStore.getState().updatePlayerOut(record.player_id, record.is_out)
+        }
+        if (typeof record.bot_controlled === 'boolean') {
+          useGameStore.getState().updateBotControlled(record.player_id, record.bot_controlled)
+        }
         break
       }
 
@@ -214,6 +245,32 @@ export function useRealtimeEvents(gameId: string | null) {
       // ── rematch_votes INSERT ────────────────────────────────────────────
       case 'rematch_votes': {
         useRoomStore.getState().incrementRematchVoteCount()
+        break
+      }
+
+      // ── forfeit_votes INSERT / UPDATE ───────────────────────────────────
+      case 'forfeit_votes': {
+        const record = (payload as {
+          new?: { id: string; game_id: string; target_player_id: string; status: 'PENDING' | 'PASSED' | 'FAILED'; expires_at: string }
+        }).new
+        if (!record) break
+        if (record.game_id !== useGameStore.getState().gameId) break
+        useGameStore.getState().setPendingForfeitVote(
+          record.status === 'PENDING'
+            ? { voteId: record.id, targetPlayerId: record.target_player_id, status: record.status, expiresAt: record.expires_at }
+            : null
+        )
+        break
+      }
+
+      // ── forfeit_vote_ballots INSERT / UPDATE ────────────────────────────
+      case 'forfeit_vote_ballots': {
+        const record = (payload as {
+          new?: { vote_id: string; voter_player_id: string; choice: 'YES' | 'NO' }
+        }).new
+        if (!record) break
+        if (record.vote_id !== useGameStore.getState().pendingForfeitVote?.voteId) break
+        useGameStore.getState().upsertForfeitVoteBallot(record.voter_player_id, record.choice)
         break
       }
 

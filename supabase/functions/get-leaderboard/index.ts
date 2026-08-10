@@ -4,12 +4,15 @@
  * Read-only leaderboard query over player_stats (Ranked_Game outcomes only —
  * see finalizeRankedStats in call-number/index.ts, the sole writer).
  *
- * Request body: { sort?: 'wins' | 'win_rate', limit?: number, offset?: number }
- * Response: { entries: [...], total, sort, my_entry: {...} | null }
+ * Request body: { capacity: 2 | 3 | 4, sort?: 'wins' | 'win_rate', limit?: number, offset?: number }
+ * Response: { entries: [...], total, sort, capacity, my_entry: {...} | null }
  *
- * Spec: bingo-leaderboard §Req 2
- * - sort=wins: every player with a player_stats row, ordered by games_won desc
- * - sort=win_rate: only players with games_played >= 5, ordered by win_rate desc
+ * Spec: bingo-leaderboard §Req 2; bingo-disconnect-recovery §3.1 (mode split —
+ * player_stats is keyed by (player_id, capacity), so every query is scoped
+ * to one party size. A 4-player win is a different ranking from a 2-player
+ * win, never mixed together.)
+ * - sort=wins: every player with a player_stats row at this capacity, ordered by games_won desc
+ * - sort=win_rate: only players with games_played >= 5 *at this capacity*, ordered by win_rate desc
  * - Tie-break: (wins) win_rate desc, then username asc.
  *              (win_rate) games_won desc, then username asc.
  * - my_entry: the requesting player's own row + rank even if outside the
@@ -43,12 +46,17 @@ Deno.serve(async (req: Request) => {
   if (auth.error) return auth.error
   const { userId } = auth
 
-  let body: { sort?: unknown; limit?: unknown; offset?: unknown } = {}
+  let body: { capacity?: unknown; sort?: unknown; limit?: unknown; offset?: unknown } = {}
   try {
     body = await req.json()
   } catch {
-    // Empty body is fine — all params optional
+    // Empty body — capacity is still required below
   }
+
+  if (![2, 3, 4].includes(body.capacity as number)) {
+    return err('INVALID_INPUT', 'capacity must be 2, 3, or 4', 400)
+  }
+  const capacity = body.capacity as 2 | 3 | 4
 
   const sort = body.sort === 'win_rate' ? 'win_rate' : 'wins'
   const limit = Number.isInteger(body.limit)
@@ -64,6 +72,7 @@ Deno.serve(async (req: Request) => {
   const { data: rows, error } = await admin
     .from('player_stats')
     .select('player_id, games_played, games_won, profiles(username)')
+    .eq('capacity', capacity)
 
   if (error) {
     console.error('[get-leaderboard] fetch error:', error)
@@ -108,6 +117,7 @@ Deno.serve(async (req: Request) => {
     entries: page,
     total,
     sort,
+    capacity,
     win_rate_min_games: WIN_RATE_MIN_GAMES,
     my_entry: myEntry,
   })

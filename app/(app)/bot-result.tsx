@@ -5,9 +5,12 @@
  * with the same player count — no rematch-vote flow, since there are no
  * other humans to vote (spec bingo-play-vs-bot Req 3.3).
  */
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useBotGameStore, HUMAN_PLAYER_ID } from '@/store/botGameStore'
+import { colors, fonts, spacing, KICKER_LETTER_SPACING } from '@/theme'
+import { PaperBackground, NewsButton, NewsCard, Divider } from '@/components/news'
 
 export default function BotResultScreen() {
   const winnerId = useBotGameStore((s) => s.winnerId)
@@ -33,81 +36,85 @@ export default function BotResultScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.resultCard}>
-        {isDraw ? (
-          <>
-            <Text style={styles.drawEmoji}>🤝</Text>
-            <Text style={styles.resultTitle}>No Winner</Text>
-            <Text style={styles.resultSubtitle}>It&apos;s a draw — all 25 numbers called!</Text>
-          </>
-        ) : isWinner ? (
-          <>
-            <Text style={styles.winEmoji}>🏆</Text>
-            <Text style={styles.resultTitle}>You Win!</Text>
-            <Text style={styles.resultSubtitle}>Winning call: {winningCall}</Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.loseEmoji}>🤖</Text>
-            <Text style={styles.resultTitle}>{winnerName ?? 'Bot'} Wins</Text>
-            <Text style={styles.resultSubtitle}>Better luck next time!</Text>
-          </>
-        )}
-      </View>
+    <PaperBackground>
+      <View style={styles.container}>
+        <NewsCard style={styles.resultCard}>
+          {isDraw ? (
+            <>
+              <MaterialCommunityIcons name="handshake-outline" size={52} color={colors.inkFaded} />
+              <Text style={styles.kicker}>Practice Edition</Text>
+              <Text style={styles.resultTitle}>No Winner</Text>
+              <Text style={styles.resultSubtitle}>It&apos;s a draw — all 25 numbers called!</Text>
+            </>
+          ) : isWinner ? (
+            <>
+              <Ionicons name="trophy" size={52} color={colors.accent} />
+              <Text style={styles.kicker}>Practice Edition</Text>
+              <Text style={styles.resultTitle}>You Win!</Text>
+              <Text style={styles.resultSubtitle}>Winning call: {winningCall}</Text>
+            </>
+          ) : (
+            <>
+              <MaterialCommunityIcons name="robot-outline" size={52} color={colors.inkFaded} />
+              <Text style={styles.kicker}>Practice Edition</Text>
+              <Text style={styles.resultTitle}>{winnerName ?? 'Bot'} Wins</Text>
+              <Text style={styles.resultSubtitle}>Better luck next time!</Text>
+            </>
+          )}
+        </NewsCard>
 
-      <View style={styles.scoresContainer}>
-        <Text style={styles.scoresTitle}>Final Scores</Text>
-        {players.map((p) => (
-          <View key={p.playerId} style={styles.scoreRow}>
-            <Text style={styles.scoreLabel}>
-              {p.displayName}
-              {p.playerId === winnerId ? ' 🏆' : ''}
-            </Text>
-            <Text style={styles.scoreValue}>{scoreMap[p.playerId] ?? 0} lines</Text>
-          </View>
-        ))}
-      </View>
+        <View style={styles.scoresContainer}>
+          <Text style={styles.scoresTitle}>Final Scores</Text>
+          <Divider />
+          {players.map((p, i) => (
+            <View key={p.playerId}>
+              {i > 0 ? <Divider style={styles.rowRule} /> : null}
+              <View style={styles.scoreRow}>
+                <View style={styles.scoreLabelRow}>
+                  <Text style={styles.scoreLabel}>{p.displayName}</Text>
+                  {p.playerId === winnerId ? <Ionicons name="trophy" size={14} color={colors.accent} /> : null}
+                </View>
+                <Text style={styles.scoreValue}>{scoreMap[p.playerId] ?? 0} lines</Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.playAgainButton}
-          onPress={handlePlayAgain}
-          accessibilityRole="button"
-          accessibilityLabel="Play again"
-        >
-          <Text style={styles.playAgainText}>Play Again</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.leaveButton}
-          onPress={handleBackHome}
-          accessibilityRole="button"
-          accessibilityLabel="Back to home"
-        >
-          <Text style={styles.leaveText}>Back to Home</Text>
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <NewsButton label="Play Again" onPress={handlePlayAgain} variant="accent" accessibilityLabel="Play again" />
+          <NewsButton label="Back to Home" onPress={handleBackHome} variant="plain" accessibilityLabel="Back to home" />
+        </View>
       </View>
-    </View>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a2e', paddingHorizontal: 24, justifyContent: 'center', gap: 24 },
-  resultCard: { backgroundColor: '#2a2a40', borderRadius: 16, padding: 32, alignItems: 'center', gap: 8 },
-  winEmoji: { fontSize: 56 },
-  loseEmoji: { fontSize: 56 },
-  drawEmoji: { fontSize: 56 },
-  resultTitle: { fontSize: 32, fontWeight: 'bold', color: '#ffffff' },
-  resultSubtitle: { fontSize: 15, color: '#aaaaaa', textAlign: 'center' },
-  scoresContainer: { gap: 8 },
-  scoresTitle: { color: '#888888', fontSize: 13, textTransform: 'uppercase' },
-  scoreRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#2a2a40', borderRadius: 8, padding: 12 },
-  scoreLabel: { color: '#ffffff', fontSize: 15 },
-  scoreValue: { color: '#6c63ff', fontSize: 15, fontWeight: '700' },
-  actions: { gap: 10 },
-  playAgainButton: { backgroundColor: '#6c63ff', borderRadius: 10, paddingVertical: 16, alignItems: 'center' },
-  playAgainText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
-  leaveButton: { backgroundColor: '#2a2a40', borderRadius: 10, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#3a3a55' },
-  leaveText: { color: '#cc4444', fontSize: 16 },
+  container: {
+    flex: 1,
+    paddingHorizontal: 24, justifyContent: 'center', gap: spacing.lg,
+  },
+  resultCard: {
+    alignItems: 'center', gap: 6, paddingVertical: 32,
+  },
+  kicker: {
+    fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
+    color: colors.inkFaded, marginTop: spacing.sm,
+  },
+  resultTitle: { fontFamily: fonts.headlineBlack, fontSize: 32, color: colors.ink },
+  resultSubtitle: { fontFamily: fonts.bodyItalic, fontSize: 15, color: colors.inkFaded, textAlign: 'center' },
+  scoresContainer: { gap: spacing.xs },
+  scoresTitle: {
+    fontFamily: fonts.bodyBold, color: colors.inkFaded, fontSize: 12,
+    letterSpacing: KICKER_LETTER_SPACING,
+  },
+  rowRule: { marginVertical: 2 },
+  scoreRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10,
+  },
+  scoreLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  scoreLabel: { fontFamily: fonts.body, color: colors.ink, fontSize: 15 },
+  scoreValue: { fontFamily: fonts.bodyBold, color: colors.accent, fontSize: 15 },
+  actions: { gap: spacing.sm },
 })

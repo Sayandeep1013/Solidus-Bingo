@@ -2,11 +2,18 @@
  * Edge Function: join-queue
  *
  * Enters the caller into the ranked matchmaking queue for a chosen party
- * size (2, 3, or 4) and, if enough players are now waiting for that same
- * size, atomically creates a Ranked_Room + ACTIVE game for the match and
- * skips straight past the lobby (spec bingo-ranked-matchmaking §Req 1-3).
+ * size (2, 3, or 4) *and* time bank, and, if enough players are now waiting
+ * for that same combination, atomically creates a Ranked_Room + ACTIVE game
+ * for the match and skips straight past the lobby (spec
+ * bingo-ranked-matchmaking §Req 1-3).
  *
- * Request body: { capacity: 2 | 3 | 4 }
+ * Matching is 2-dimensional as of bingo-disconnect-recovery §4 — capacity
+ * AND time_bank_ms both have to match, the same way chess.com buckets by
+ * time control. This can mean longer queue waits for uncommon time bank
+ * choices; no fuzzy/closest-match fallback in this phase (accepted
+ * tradeoff, see that spec's Open Question 3).
+ *
+ * Request body: { capacity: 2 | 3 | 4, time_bank_ms: number }
  * Response: { matched: false, queue_id } while still searching, or
  *           { matched: true, room_id, game_id } the instant a match forms.
  *
@@ -27,6 +34,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { requireAuth, handleCors, ok, err, CORS_HEADERS } from '../_shared/auth.ts'
 
 const QUEUE_EXPIRY_MS = 60_000
+
+/** 3 / 5 / 10 / 15 / 30 minutes — same presets offered at room creation. */
+const VALID_TIME_BANKS_MS = [180_000, 300_000, 600_000, 900_000, 1_800_000]
 
 function generateBoard(): number[] {
   const board = Array.from({ length: 25 }, (_, i) => i + 1)
@@ -55,7 +65,7 @@ Deno.serve(async (req: Request) => {
   if (auth.error) return auth.error
   const { userId } = auth
 
-  let body: { capacity?: unknown }
+  let body: { capacity?: unknown; time_bank_ms?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -65,6 +75,11 @@ Deno.serve(async (req: Request) => {
   const capacity = body.capacity
   if (capacity !== 2 && capacity !== 3 && capacity !== 4) {
     return err('INVALID_CAPACITY', 'capacity must be 2, 3, or 4', 400)
+  }
+
+  const timeBankMs = body.time_bank_ms
+  if (!VALID_TIME_BANKS_MS.includes(timeBankMs as number)) {
+    return err('INVALID_TIME_BANK', `time_bank_ms must be one of: ${VALID_TIME_BANKS_MS.join(', ')}`, 400)
   }
 
   const admin = createClient(
@@ -108,7 +123,7 @@ Deno.serve(async (req: Request) => {
   // ── Insert my queue entry ───────────────────────────────────────────────────
   const { data: myEntry, error: insertError } = await admin
     .from('matchmaking_queue')
-    .insert({ player_id: userId, capacity })
+    .insert({ player_id: userId, capacity, time_bank_ms: timeBankMs })
     .select('id, queued_at')
     .single()
 
@@ -120,11 +135,13 @@ Deno.serve(async (req: Request) => {
     return err('INTERNAL_ERROR', 'Failed to join queue', 500)
   }
 
-  // ── Try to form a match: oldest `capacity` WAITING entries for this size ───
+  // ── Try to form a match: oldest `capacity` WAITING entries for this size
+  // AND time bank — both dimensions have to match, see header comment ───────
   const { data: waiting } = await admin
     .from('matchmaking_queue')
     .select('id, player_id, queued_at')
     .eq('capacity', capacity)
+    .eq('time_bank_ms', timeBankMs)
     .eq('status', 'WAITING')
     .order('queued_at', { ascending: true })
     .limit(capacity)
@@ -175,6 +192,7 @@ Deno.serve(async (req: Request) => {
       host_id: orderedPlayers[0].player_id,
       capacity: n,
       status: 'FULL',
+      time_bank_ms: timeBankMs,
     })
     .select('id')
     .single()
@@ -193,6 +211,7 @@ Deno.serve(async (req: Request) => {
   )
 
   const firstPlayerIdx = Math.floor(Math.random() * n)
+  const now = new Date().toISOString()
 
   const { data: game, error: gameError } = await admin
     .from('games')
@@ -201,7 +220,8 @@ Deno.serve(async (req: Request) => {
       game_number: 1,
       status: 'ACTIVE',
       active_player_id: orderedPlayers[firstPlayerIdx].player_id,
-      started_at: new Date().toISOString(),
+      started_at: now,
+      turn_started_at: now,
     })
     .select('id')
     .single()
@@ -212,7 +232,9 @@ Deno.serve(async (req: Request) => {
   }
 
   await admin.from('game_players').insert(
-    orderedPlayers.map((p, i) => ({ game_id: game.id, player_id: p.player_id, turn_order: i + 1, score: 0 }))
+    orderedPlayers.map((p, i) => ({
+      game_id: game.id, player_id: p.player_id, turn_order: i + 1, score: 0, time_remaining_ms: timeBankMs,
+    }))
   )
   await admin.from('game_boards').insert(
     orderedPlayers.map((p, i) => ({ game_id: game.id, player_id: p.player_id, layout: boards[i] }))

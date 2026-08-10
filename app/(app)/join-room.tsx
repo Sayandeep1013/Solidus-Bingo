@@ -5,18 +5,12 @@
  * Normalises to uppercase before sending to Edge Function.
  */
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-} from 'react-native'
+import { KeyboardAvoidingView, Platform, Text, TextInput, StyleSheet } from 'react-native'
 import { router } from 'expo-router'
 import { invokeEdgeFunction } from '@/lib/invokeEdgeFunction'
 import { useRoomStore } from '@/store/roomStore'
+import { colors, fonts, spacing } from '@/theme'
+import { PageHeader, PaperBackground, NewsButton } from '@/components/news'
 
 export default function JoinRoomScreen() {
   const [code, setCode] = useState('')
@@ -78,70 +72,53 @@ export default function JoinRoomScreen() {
   const isDisabled = isLoading || code.trim().length !== 6
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.title}>Join a Room</Text>
-      <Text style={styles.subtitle}>Enter the 6-character room code.</Text>
-
-      <TextInput
-        style={[styles.input, error ? styles.inputError : null]}
-        value={code}
-        onChangeText={(t) => { setCode(t.toUpperCase()); setError(null) }}
-        placeholder="e.g. ABC3DX"
-        placeholderTextColor="#555555"
-        autoCapitalize="characters"
-        autoCorrect={false}
-        maxLength={6}
-        returnKeyType="done"
-        onSubmitEditing={handleJoin}
-        editable={!isLoading}
-        accessibilityLabel="Room code input"
-      />
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-      <TouchableOpacity
-        style={[styles.joinButton, isDisabled && styles.disabled]}
-        onPress={handleJoin}
-        disabled={isDisabled}
-        accessibilityRole="button"
-        accessibilityLabel="Join room"
+    <PaperBackground>
+      <PageHeader title="Join a Room" backLabel="Back" />
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {isLoading ? (
-          <ActivityIndicator color="#ffffff" size="small" />
-        ) : (
-          <Text style={styles.joinButtonText}>Join Room</Text>
-        )}
-      </TouchableOpacity>
-    </KeyboardAvoidingView>
+        <Text style={styles.subtitle}>Enter the 6-character room code.</Text>
+
+        <TextInput
+          style={[styles.input, error ? styles.inputError : null]}
+          value={code}
+          onChangeText={(t) => { setCode(t.toUpperCase()); setError(null) }}
+          placeholder="e.g. ABC3DX"
+          placeholderTextColor={colors.inkFaint}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={6}
+          returnKeyType="done"
+          onSubmitEditing={handleJoin}
+          editable={!isLoading}
+          accessibilityLabel="Room code input"
+        />
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <NewsButton
+          label="Join Room"
+          onPress={handleJoin}
+          variant="accent"
+          disabled={isDisabled}
+          loading={isLoading}
+        />
+      </KeyboardAvoidingView>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a2e', paddingHorizontal: 24, paddingTop: 60, gap: 16 },
-  backButton: { marginBottom: 8 },
-  backText: { color: '#6c63ff', fontSize: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#ffffff' },
-  subtitle: { fontSize: 16, color: '#aaaaaa', marginBottom: 8 },
+  container: { paddingHorizontal: 24, gap: spacing.md },
+  subtitle: { fontFamily: fonts.body, fontSize: 16, color: colors.inkFaded, marginBottom: spacing.xs },
   input: {
-    backgroundColor: '#2a2a40', borderRadius: 8,
+    backgroundColor: colors.paperMuted,
     paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 24, fontWeight: '700', color: '#ffffff',
+    fontFamily: fonts.headlineBold, fontSize: 24, color: colors.ink,
     textAlign: 'center', letterSpacing: 6,
-    borderWidth: 1, borderColor: '#3a3a55',
+    borderWidth: 1, borderColor: colors.rule,
   },
-  inputError: { borderColor: '#ff6b6b' },
-  errorText: { color: '#ff6b6b', fontSize: 14 },
-  joinButton: {
-    backgroundColor: '#6c63ff', borderRadius: 10,
-    paddingVertical: 16, alignItems: 'center', marginTop: 8,
-  },
-  disabled: { opacity: 0.5 },
-  joinButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
+  inputError: { borderColor: colors.accent },
+  errorText: { fontFamily: fonts.body, color: colors.accent, fontSize: 14 },
 })

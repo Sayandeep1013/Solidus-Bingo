@@ -10,6 +10,7 @@
 import { Redirect } from 'expo-router'
 import { View, StyleSheet } from 'react-native'
 import { useAuth } from '@/context/AuthContext'
+import { colors } from '@/theme'
 
 export default function Index() {
   const { session, profile, isLoading } = useAuth()
@@ -33,6 +34,6 @@ export default function Index() {
 const styles = StyleSheet.create({
   blank: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.paper,
   },
 })

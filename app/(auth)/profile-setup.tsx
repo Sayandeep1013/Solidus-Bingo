@@ -17,19 +17,12 @@
  *   3. UNIQUENESS → USERNAME_TAKEN (server only)
  */
 import { useState } from 'react'
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { KeyboardAvoidingView, Platform, Text, TextInput, View, StyleSheet } from 'react-native'
 import { Redirect } from 'expo-router'
 import { useAuth } from '@/context/AuthContext'
 import type { UsernameErrorCode } from '@/types/auth'
+import { colors, fonts, spacing } from '@/theme'
+import { PaperBackground, NewsButton, SectionLabel } from '@/components/news'
 
 const USERNAME_CHARS_RE = /^[A-Za-z0-9_-]+$/
 
@@ -97,114 +90,93 @@ export default function ProfileSetupScreen() {
   const isDisabled = isSubmitting || !username.trim()
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.inner}>
-        <Text style={styles.title}>Choose a username</Text>
-        <Text style={styles.subtitle}>
-          This is how other players will see you.
-          {'\n'}Letters, numbers, underscores, and hyphens only.
-        </Text>
+    <PaperBackground>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.inner}>
+          <SectionLabel>Registration</SectionLabel>
+          <Text style={styles.title}>Choose a Byline</Text>
+          <Text style={styles.subtitle}>
+            This is how other players will see you.
+            {'\n'}Letters, numbers, underscores, and hyphens only.
+          </Text>
 
-        <TextInput
-          style={[styles.input, error ? styles.inputError : null]}
-          value={username}
-          onChangeText={(t) => {
-            setUsername(t)
-            setError(null)
-          }}
-          placeholder="e.g. BingoKing_99"
-          placeholderTextColor="#555555"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="username-new"
-          maxLength={30}
-          returnKeyType="done"
-          onSubmitEditing={handleSubmit}
-          editable={!isSubmitting}
-          accessibilityLabel="Username input"
-        />
+          <TextInput
+            style={[styles.input, error ? styles.inputError : null]}
+            value={username}
+            onChangeText={(t) => {
+              setUsername(t)
+              setError(null)
+            }}
+            placeholder="e.g. BingoKing_99"
+            placeholderTextColor={colors.inkFaint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username-new"
+            maxLength={30}
+            returnKeyType="done"
+            onSubmitEditing={handleSubmit}
+            editable={!isSubmitting}
+            accessibilityLabel="Username input"
+          />
 
-        {error ? (
-          <Text style={styles.errorText}>{error}</Text>
-        ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        <TouchableOpacity
-          style={[styles.button, isDisabled && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={isDisabled}
-          accessibilityRole="button"
-          accessibilityLabel="Confirm username"
-          accessibilityState={{ disabled: isDisabled }}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#1a1a2e" size="small" />
-          ) : (
-            <Text style={styles.buttonText}>Confirm</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+          <NewsButton
+            label="Confirm"
+            onPress={handleSubmit}
+            variant="primary"
+            disabled={isDisabled}
+            loading={isSubmitting}
+            accessibilityLabel="Confirm username"
+          />
+        </View>
+      </KeyboardAvoidingView>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
   },
   inner: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
-    gap: 12,
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
+    fontFamily: fonts.headlineBold,
+    fontSize: 30,
+    color: colors.ink,
+    marginTop: spacing.xs,
   },
   subtitle: {
+    fontFamily: fonts.body,
     fontSize: 14,
-    color: '#888888',
+    color: colors.inkFaded,
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: spacing.xs,
   },
   input: {
-    backgroundColor: '#2a2a40',
-    borderRadius: 8,
+    backgroundColor: colors.paperMuted,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    fontFamily: fonts.body,
     fontSize: 16,
-    color: '#ffffff',
+    color: colors.ink,
     borderWidth: 1,
-    borderColor: '#3a3a55',
+    borderColor: colors.rule,
   },
   inputError: {
-    borderColor: '#ff6b6b',
+    borderColor: colors.accent,
   },
   errorText: {
-    color: '#ff6b6b',
+    fontFamily: fonts.body,
+    color: colors.accent,
     fontSize: 13,
-  },
-  button: {
-    backgroundColor: '#6c63ff',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 })

@@ -100,6 +100,14 @@ export function useRealtimeChannel(roomId: string | null, gameId: string | null)
         { event: 'INSERT', schema: 'public', table: 'rematch_votes', filter: `room_id=eq.${currentRoomId}` },
         (payload) => dispatchRef.current('rematch_votes', payload))
 
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'forfeit_votes' },
+        (payload) => dispatchRef.current('forfeit_votes', payload))
+
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'forfeit_vote_ballots' },
+        (payload) => dispatchRef.current('forfeit_vote_ballots', payload))
+
       // Presence
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState()

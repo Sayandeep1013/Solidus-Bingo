@@ -7,14 +7,11 @@
  *
  * Spec: bingo-realtime §Req 9, bingo-state-management §Req 9
  */
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Text, View, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useConnectionStore } from '../store/connectionStore'
+import { colors, fonts, spacing } from '../theme'
+import { NewsButton, NewsCard } from './news'
 
 interface ConnectionBannerProps {
   /** Called when user taps "Retry" on the DISCONNECTED screen */
@@ -34,12 +31,15 @@ export function ConnectionBanner({ onRetry, onLeave }: ConnectionBannerProps) {
   if (connectionState === 'RECONNECTING') {
     return (
       <View style={styles.reconnectingBanner} accessibilityLiveRegion="polite">
-        <ActivityIndicator color="#cc99ff" size="small" />
+        <ActivityIndicator color={colors.paper} size="small" />
         <Text style={styles.reconnectingText}>
           Reconnecting{reconnectAttempts > 1 ? ` (attempt ${reconnectAttempts})` : '…'}
         </Text>
         {snapshotError ? (
-          <Text style={styles.snapshotErrorText}>⚠ Sync error</Text>
+          <View style={styles.snapshotErrorRow}>
+            <Ionicons name="warning-outline" size={12} color={colors.paper} />
+            <Text style={styles.snapshotErrorText}>Sync error</Text>
+          </View>
         ) : null}
       </View>
     )
@@ -48,8 +48,8 @@ export function ConnectionBanner({ onRetry, onLeave }: ConnectionBannerProps) {
   // ── DISCONNECTED — full-screen blocking overlay ───────────────────────────
   return (
     <View style={styles.disconnectedOverlay} accessibilityLiveRegion="assertive">
-      <View style={styles.disconnectedCard}>
-        <Text style={styles.disconnectedIcon}>📡</Text>
+      <NewsCard style={styles.disconnectedCard}>
+        <Ionicons name="cloud-offline-outline" size={44} color={colors.accent} />
         <Text style={styles.disconnectedTitle}>Connection Lost</Text>
         <Text style={styles.disconnectedSubtitle}>
           Could not reconnect after 2 minutes.{'\n'}
@@ -59,35 +59,16 @@ export function ConnectionBanner({ onRetry, onLeave }: ConnectionBannerProps) {
         {snapshotError ? (
           <View style={styles.snapshotErrorBox}>
             <Text style={styles.snapshotErrorDetail}>
-              ⚠ Could not sync game state: {snapshotError}
+              Could not sync game state: {snapshotError}
             </Text>
           </View>
         ) : null}
 
         <View style={styles.disconnectedActions}>
-          {onRetry ? (
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={onRetry}
-              accessibilityRole="button"
-              accessibilityLabel="Retry connection"
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {onLeave ? (
-            <TouchableOpacity
-              style={styles.leaveButton}
-              onPress={onLeave}
-              accessibilityRole="button"
-              accessibilityLabel="Leave game"
-            >
-              <Text style={styles.leaveButtonText}>Leave Game</Text>
-            </TouchableOpacity>
-          ) : null}
+          {onRetry ? <NewsButton label="Retry" onPress={onRetry} variant="accent" accessibilityLabel="Retry connection" /> : null}
+          {onLeave ? <NewsButton label="Leave Game" onPress={onLeave} variant="plain" accessibilityLabel="Leave game" /> : null}
         </View>
-      </View>
+      </NewsCard>
     </View>
   )
 }
@@ -95,92 +76,69 @@ export function ConnectionBanner({ onRetry, onLeave }: ConnectionBannerProps) {
 const styles = StyleSheet.create({
   // Reconnecting banner — non-blocking, sits at top
   reconnectingBanner: {
-    backgroundColor: '#2a1a3a',
+    backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.xs,
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
   reconnectingText: {
-    color: '#cc99ff',
+    fontFamily: fonts.bodyBold,
+    color: colors.paper,
     fontSize: 13,
   },
+  snapshotErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 4 },
   snapshotErrorText: {
-    color: '#ffaa44',
+    fontFamily: fonts.body,
+    color: colors.paper,
     fontSize: 12,
-    marginLeft: 4,
   },
 
   // Disconnected — full-screen blocking overlay
   disconnectedOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
     paddingHorizontal: 24,
   },
   disconnectedCard: {
-    backgroundColor: '#1e1e30',
-    borderRadius: 16,
-    padding: 32,
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.sm,
     width: '100%',
-    borderWidth: 1,
-    borderColor: '#3a3a55',
+    padding: 32,
   },
-  disconnectedIcon: { fontSize: 48 },
   disconnectedTitle: {
+    fontFamily: fonts.headlineBold,
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    color: colors.ink,
   },
   disconnectedSubtitle: {
+    fontFamily: fonts.body,
     fontSize: 14,
-    color: '#aaaaaa',
+    color: colors.inkFaded,
     textAlign: 'center',
     lineHeight: 20,
   },
   snapshotErrorBox: {
-    backgroundColor: '#2a1a00',
-    borderRadius: 8,
+    backgroundColor: colors.paperMuted,
+    borderWidth: 1,
+    borderColor: colors.accent,
     padding: 10,
     width: '100%',
   },
   snapshotErrorDetail: {
-    color: '#ffaa44',
+    fontFamily: fonts.body,
+    color: colors.accent,
     fontSize: 12,
     textAlign: 'center',
   },
   disconnectedActions: {
-    gap: 10,
+    gap: spacing.sm,
     width: '100%',
-    marginTop: 8,
-  },
-  retryButton: {
-    backgroundColor: '#6c63ff',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  leaveButton: {
-    backgroundColor: '#2a2a40',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3a3a55',
-  },
-  leaveButtonText: {
-    color: '#cc4444',
-    fontSize: 15,
+    marginTop: spacing.xs,
   },
 })

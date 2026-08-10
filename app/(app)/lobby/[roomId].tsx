@@ -10,25 +10,23 @@
  * - Retain channel subscription across lobby → game transition
  */
 import { useEffect, useState } from 'react'
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { ActivityIndicator, ScrollView, Text, View, StyleSheet } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuth } from '@/context/AuthContext'
 import { useRoomStore, selectCanStartGame } from '@/store/roomStore'
 import { useConnectionStore, selectIsConnected } from '@/store/connectionStore'
 import { useGameStore } from '@/store/gameStore'
 import { invokeEdgeFunction } from '@/lib/invokeEdgeFunction'
 import type { RoomPlayer } from '@/types/game'
+import { colors, fonts, spacing, radius, KICKER_LETTER_SPACING } from '@/theme'
+import { PaperBackground, NewsButton, NewsCard, Divider } from '@/components/news'
 
 export default function LobbyScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>()
   const { userId } = useAuth()
+  const insets = useSafeAreaInsets()
 
   const roomCode = useRoomStore((s) => s.roomCode)
   const capacity = useRoomStore((s) => s.capacity)
@@ -95,73 +93,65 @@ export default function LobbyScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Connection banner */}
-      {!isConnected && (
-        <View style={styles.reconnectingBanner}>
-          <ActivityIndicator color="#ffffff" size="small" />
-          <Text style={styles.reconnectingText}>Reconnecting…</Text>
-        </View>
-      )}
-
-      <View style={styles.header}>
-        <Text style={styles.roomCode}>Room: {roomCode ?? '------'}</Text>
-        <Text style={styles.statusText}>{roomStatus}</Text>
-      </View>
-
-      {/* Player slots */}
-      <ScrollView style={styles.playersContainer} contentContainerStyle={styles.playersContent}>
-        {Array.from({ length: capacity ?? 4 }).map((_, i) => {
-          const player = players[i]
-          return <PlayerSlot key={i} player={player} isMe={player?.playerId === userId} />
-        })}
-      </ScrollView>
-
-      {startError ? (
-        <Text style={styles.errorText}>{startError}</Text>
-      ) : null}
-
-      {/* Rematch waiting state */}
-      {roomStatus === 'REMATCH_WAITING' && (
-        <View style={styles.rematchContainer}>
-          <Text style={styles.rematchText}>
-            Rematch votes: {rematchVoteCount} / {players.filter(p => p.isOnline).length}
-          </Text>
-          <TouchableOpacity style={styles.rematchButton} onPress={handleRematchVote}>
-            <Text style={styles.rematchButtonText}>Play Again</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.footer}>
-        {/* Start Game — only visible and enabled for host when room is FULL + CONNECTED */}
-        {canStart && roomStatus === 'FULL' && (
-          <TouchableOpacity
-            style={[styles.startButton, isStarting && styles.disabled]}
-            onPress={handleStartGame}
-            disabled={isStarting}
-            accessibilityRole="button"
-            accessibilityLabel="Start game"
-          >
-            {isStarting ? (
-              <ActivityIndicator color="#ffffff" size="small" />
-            ) : (
-              <Text style={styles.startButtonText}>Start Game</Text>
-            )}
-          </TouchableOpacity>
+    <PaperBackground>
+      <View style={styles.container}>
+        {/* Connection banner */}
+        {!isConnected && (
+          <View style={styles.reconnectingBanner}>
+            <ActivityIndicator color={colors.paper} size="small" />
+            <Text style={styles.reconnectingText}>Reconnecting…</Text>
+          </View>
         )}
 
-        <TouchableOpacity
-          style={[styles.leaveButton, isLeaving && styles.disabled]}
-          onPress={handleLeaveRoom}
-          disabled={isLeaving}
-          accessibilityRole="button"
-          accessibilityLabel="Leave room"
-        >
-          <Text style={styles.leaveButtonText}>Leave</Text>
-        </TouchableOpacity>
+        <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+          <Text style={styles.kicker}>Room Notice</Text>
+          <Text style={styles.roomCode}>{roomCode ?? '------'}</Text>
+          <Text style={styles.statusText}>{roomStatus}</Text>
+          <Divider style={styles.headerRule} />
+        </View>
+
+        {/* Player slots */}
+        <ScrollView style={styles.playersContainer} contentContainerStyle={styles.playersContent}>
+          {Array.from({ length: capacity ?? 4 }).map((_, i) => {
+            const player = players[i]
+            return <PlayerSlot key={i} player={player} isMe={player?.playerId === userId} />
+          })}
+        </ScrollView>
+
+        {startError ? <Text style={styles.errorText}>{startError}</Text> : null}
+
+        {/* Rematch waiting state */}
+        {roomStatus === 'REMATCH_WAITING' && (
+          <View style={styles.rematchContainer}>
+            <Text style={styles.rematchText}>
+              Rematch votes: {rematchVoteCount} / {players.filter((p) => p.isOnline).length}
+            </Text>
+            <NewsButton label="Play Again" onPress={handleRematchVote} variant="accent" />
+          </View>
+        )}
+
+        <View style={styles.footer}>
+          {/* Start Game — only visible and enabled for host when room is FULL + CONNECTED */}
+          {canStart && roomStatus === 'FULL' && (
+            <NewsButton
+              label="Start Game"
+              onPress={handleStartGame}
+              variant="accent"
+              loading={isStarting}
+              accessibilityLabel="Start game"
+            />
+          )}
+
+          <NewsButton
+            label="Leave"
+            onPress={handleLeaveRoom}
+            variant="plain"
+            loading={isLeaving}
+            accessibilityLabel="Leave room"
+          />
+        </View>
       </View>
-    </View>
+    </PaperBackground>
   )
 }
 
@@ -170,73 +160,61 @@ export default function LobbyScreen() {
 function PlayerSlot({ player, isMe }: { player?: RoomPlayer; isMe: boolean }) {
   if (!player) {
     return (
-      <View style={[styles.slot, styles.slotEmpty]}>
-        <Text style={styles.slotEmptyText}>Waiting…</Text>
-      </View>
+      <NewsCard style={styles.slotEmpty}>
+        <Text style={styles.slotEmptyText}>Awaiting Player…</Text>
+      </NewsCard>
     )
   }
 
   return (
-    <View style={[styles.slot, !player.isOnline && styles.slotDisconnected]}>
+    <NewsCard muted={!player.isOnline} style={styles.slot}>
       <View style={styles.slotLeft}>
         <Text style={styles.slotUsername}>
           {player.username ?? 'Loading…'}
           {isMe ? ' (you)' : ''}
         </Text>
         {!player.isOnline && (
-          <Text style={styles.disconnectedLabel}>disconnected</Text>
+          <View style={styles.disconnectedRow}>
+            <Ionicons name="cloud-offline-outline" size={12} color={colors.accent} />
+            <Text style={styles.disconnectedLabel}>disconnected</Text>
+          </View>
         )}
       </View>
-      <View style={styles.slotRight}>
-        {player.joinOrder === 1 && (
-          <Text style={styles.hostCrown}>👑</Text>
-        )}
-      </View>
-    </View>
+      {player.joinOrder === 1 && (
+        <MaterialCommunityIcons name="crown-outline" size={20} color={colors.accent} />
+      )}
+    </NewsCard>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a2e' },
+  container: { flex: 1 },
   reconnectingBanner: {
-    backgroundColor: '#2a1a3a', flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 8, paddingVertical: 8,
+    backgroundColor: colors.accent, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: spacing.xs, paddingVertical: 8,
   },
-  reconnectingText: { color: '#cc99ff', fontSize: 13 },
-  header: { padding: 24, gap: 4 },
-  roomCode: { fontSize: 22, fontWeight: 'bold', color: '#ffffff' },
-  statusText: { fontSize: 13, color: '#888888', textTransform: 'uppercase' },
+  reconnectingText: { fontFamily: fonts.bodyBold, color: colors.paper, fontSize: 13 },
+  header: { paddingHorizontal: 24, paddingBottom: spacing.sm, gap: 2 },
+  kicker: {
+    fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
+    color: colors.inkFaded,
+  },
+  roomCode: { fontFamily: fonts.headlineBlack, fontSize: 32, color: colors.ink, letterSpacing: 2 },
+  statusText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.accent, textTransform: 'uppercase', letterSpacing: 1 },
+  headerRule: { marginTop: spacing.sm },
   playersContainer: { flex: 1 },
-  playersContent: { paddingHorizontal: 24, gap: 10, paddingBottom: 16 },
+  playersContent: { paddingHorizontal: 24, gap: spacing.sm, paddingBottom: 16, paddingTop: spacing.sm },
   slot: {
-    backgroundColor: '#2a2a40', borderRadius: 10, padding: 16,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: '#3a3a55',
   },
-  slotEmpty: { borderStyle: 'dashed', opacity: 0.5 },
-  slotEmptyText: { fontSize: 14, color: '#666666', fontStyle: 'italic' },
-  slotDisconnected: { borderColor: '#664444', opacity: 0.7 },
+  slotEmpty: { borderStyle: 'dashed', opacity: 0.6, alignItems: 'center' },
+  slotEmptyText: { fontFamily: fonts.bodyItalic, fontSize: 14, color: colors.inkFaded },
   slotLeft: { gap: 2 },
-  slotRight: {},
-  slotUsername: { fontSize: 16, color: '#ffffff', fontWeight: '600' },
-  disconnectedLabel: { fontSize: 11, color: '#aa4444' },
-  hostCrown: { fontSize: 20 },
-  rematchContainer: { paddingHorizontal: 24, gap: 12, paddingVertical: 12 },
-  rematchText: { color: '#aaaaaa', textAlign: 'center' },
-  rematchButton: {
-    backgroundColor: '#6c63ff', borderRadius: 10, paddingVertical: 14, alignItems: 'center',
-  },
-  rematchButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  footer: { padding: 24, gap: 10 },
-  startButton: {
-    backgroundColor: '#00cc88', borderRadius: 10, paddingVertical: 16, alignItems: 'center',
-  },
-  startButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
-  leaveButton: {
-    backgroundColor: '#2a2a40', borderRadius: 10, paddingVertical: 14, alignItems: 'center',
-    borderWidth: 1, borderColor: '#3a3a55',
-  },
-  leaveButtonText: { color: '#cc4444', fontSize: 16 },
-  disabled: { opacity: 0.5 },
-  errorText: { color: '#ff6b6b', fontSize: 13, textAlign: 'center', paddingHorizontal: 24 },
+  slotUsername: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
+  disconnectedRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  disconnectedLabel: { fontFamily: fonts.body, fontSize: 11, color: colors.accent },
+  rematchContainer: { paddingHorizontal: 24, gap: spacing.sm, paddingVertical: spacing.sm },
+  rematchText: { fontFamily: fonts.body, color: colors.inkFaded, textAlign: 'center' },
+  footer: { padding: 24, gap: spacing.sm, borderRadius: radius.none },
+  errorText: { fontFamily: fonts.body, color: colors.accent, fontSize: 13, textAlign: 'center', paddingHorizontal: 24 },
 })

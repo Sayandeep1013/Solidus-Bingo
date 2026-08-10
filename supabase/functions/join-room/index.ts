@@ -41,6 +41,23 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
 
+  // ── Reject if already active in another game ──────────────────────────────
+  // Same guard create-room now has — spec bingo-disconnect-recovery §3.9.
+  // (The "already a member of THIS room" check below is separate — this one
+  // catches being stuck ACTIVE in a completely different IN_GAME room.)
+  const { data: activeMemberships } = await admin
+    .from('room_players')
+    .select('rooms(status)')
+    .eq('player_id', userId)
+    .eq('status', 'ACTIVE')
+
+  const alreadyInGame = (activeMemberships ?? []).some(
+    (m) => (m.rooms as unknown as { status: string } | null)?.status === 'IN_GAME'
+  )
+  if (alreadyInGame) {
+    return err('ALREADY_IN_GAME', 'You are already in an active game', 409)
+  }
+
   // ── Find the room by code ─────────────────────────────────────────────────
   const { data: room, error: roomError } = await admin
     .from('rooms')

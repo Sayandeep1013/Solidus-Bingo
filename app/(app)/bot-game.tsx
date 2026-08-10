@@ -5,7 +5,7 @@
  * realtime channel, no Supabase writes — fully isolated from multiplayer
  * state (spec bingo-play-vs-bot Req 4).
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   ScrollView,
@@ -16,7 +16,10 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { useBotGameStore, HUMAN_PLAYER_ID, selectCutIndices } from '@/store/botGameStore'
+import { colors, fonts, spacing, radius, KICKER_LETTER_SPACING } from '@/theme'
+import { PaperBackground, Divider, NewsCard, BingoLineMark, BOARD_CELL, BOARD_GAP, BOARD_SIZE } from '@/components/news'
 
 /** Bot "thinking" delay range in ms — spec bingo-play-vs-bot Req 2.1 */
 const BOT_DELAY_MIN_MS = 900
@@ -29,6 +32,7 @@ export default function BotGameScreen() {
   const scoreMap = useBotGameStore((s) => s.scoreMap)
   const activePlayerId = useBotGameStore((s) => s.activePlayerId)
   const status = useBotGameStore((s) => s.status)
+  const completedLines = useBotGameStore((s) => s.completedLines)
   const callNumber = useBotGameStore((s) => s.callNumber)
   const reset = useBotGameStore((s) => s.reset)
 
@@ -41,6 +45,10 @@ export default function BotGameScreen() {
   const cutIndices = selectCutIndices(myBoard, calledNumbers)
   const myScore = scoreMap[HUMAN_PLAYER_ID] ?? 0
   const activePlayer = players.find((p) => p.playerId === activePlayerId)
+  const myCompletedLines = useMemo(
+    () => completedLines.filter((l) => l.playerId === HUMAN_PLAYER_ID).map((l) => l.lineId),
+    [completedLines]
+  )
 
   // Bot turn — pick a random uncalled number after a short "thinking" delay.
   // botTurnHandledRef prevents re-firing for the same turn across unrelated
@@ -93,121 +101,179 @@ export default function BotGameScreen() {
 
   if (!myBoard) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color="#ffffff" size="large" />
-        <Text style={styles.loadingText}>Setting up…</Text>
-      </View>
+      <PaperBackground>
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.ink} size="large" />
+          <Text style={styles.loadingText}>Setting up…</Text>
+        </View>
+      </PaperBackground>
     )
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.leaveTop, { paddingTop: insets.top + 12 }]}
-        onPress={handleLeave}
-        accessibilityRole="button"
-        accessibilityLabel="Leave practice game"
-      >
-        <Text style={styles.leaveTopText}>← Leave</Text>
-      </TouchableOpacity>
+    <PaperBackground>
+      <View style={styles.container}>
+        <TouchableOpacity
+          style={[styles.leaveTop, { paddingTop: insets.top + 12 }]}
+          onPress={handleLeave}
+          accessibilityRole="button"
+          accessibilityLabel="Leave practice game"
+        >
+          <Ionicons name="chevron-back" size={16} color={colors.inkFaded} />
+          <Text style={styles.leaveTopText}>Leave</Text>
+        </TouchableOpacity>
 
-      {/* Turn indicator */}
-      <View style={[styles.turnBanner, isMyTurn && styles.myTurnBanner]}>
-        <Text style={styles.turnText}>
-          {isMyTurn ? '🎯 Your Turn' : `${activePlayer?.displayName ?? 'Opponent'}'s turn…`}
-        </Text>
-        {isBotThinking && <ActivityIndicator color="#ffffff" size="small" style={{ marginLeft: 8 }} />}
-      </View>
-
-      {/* 5×5 Board */}
-      <View style={styles.boardContainer}>
-        <View style={styles.board}>
-          {myBoard.map((num, idx) => {
-            const isCut = cutIndices.has(idx)
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[styles.cell, isCut && styles.cellCut, isMyTurn && !isCut && styles.cellCallable]}
-                onPress={() => handleCellTap(idx)}
-                disabled={!isMyTurn || isCut}
-                accessibilityRole="button"
-                accessibilityLabel={`Number ${num}${isCut ? ', called' : ''}`}
-                accessibilityState={{ disabled: !isMyTurn || isCut }}
-              >
-                <Text style={[styles.cellText, isCut && styles.cellTextCut]}>{num}</Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
-      </View>
-
-      {/* Scores */}
-      <View style={styles.scoresContainer}>
-        {players.map((p) => (
-          <View key={p.playerId} style={[styles.scoreItem, p.playerId === HUMAN_PLAYER_ID && styles.myScoreItem]}>
-            <Text style={styles.scoreName}>
-              {p.displayName}
-              {p.playerId === activePlayerId ? ' •' : ''}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Turn indicator */}
+          <View style={styles.turnBanner}>
+            <View style={[styles.turnDot, isMyTurn && styles.turnDotActive]} />
+            <Text style={[styles.turnText, isMyTurn && styles.turnTextActive]}>
+              {isMyTurn ? 'Your Turn' : `${activePlayer?.displayName ?? 'Opponent'}'s turn…`}
             </Text>
-            <Text style={styles.scoreValue}>{scoreMap[p.playerId] ?? 0}/5</Text>
+            {isBotThinking && <ActivityIndicator color={colors.accent} size="small" style={{ marginLeft: 8 }} />}
           </View>
-        ))}
-      </View>
+          <Divider style={styles.turnRule} />
 
-      <Text style={styles.myScore}>Your lines: {myScore} / 5</Text>
+          {/* 5×5 Board */}
+          <View style={styles.boardContainer}>
+            <NewsCard style={styles.boardCard}>
+              <View style={styles.board}>
+                {myBoard.map((num, idx) => {
+                  const isCut = cutIndices.has(idx)
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.cell, isCut && styles.cellCut, isMyTurn && !isCut && styles.cellCallable]}
+                      onPress={() => handleCellTap(idx)}
+                      disabled={!isMyTurn || isCut}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Number ${num}${isCut ? ', called' : ''}`}
+                      accessibilityState={{ disabled: !isMyTurn || isCut }}
+                    >
+                      {isCut ? (
+                        <Ionicons name="checkmark" size={20} color={colors.success} style={styles.cutMark} />
+                      ) : null}
+                      <Text style={[styles.cellText, isCut && styles.cellTextCut]}>{num}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+                {myCompletedLines.map((lineId) => (
+                  <BingoLineMark key={lineId} lineId={lineId} />
+                ))}
+              </View>
+            </NewsCard>
+          </View>
 
-      {/* Call history */}
-      <View style={styles.callHistoryContainer}>
-        <Text style={styles.callHistoryTitle}>Called ({calledNumbers.length}/25)</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.callHistoryRow}>
-            {[...calledNumbers].reverse().map((n, i) => (
-              <View key={i} style={styles.calledChip}>
-                <Text style={styles.calledChipText}>{n}</Text>
+          {/* Scores */}
+          <View style={styles.scoresContainer}>
+            {players.map((p) => (
+              <View key={p.playerId} style={[styles.scoreItem, p.playerId === HUMAN_PLAYER_ID && styles.myScoreItem]}>
+                <Text style={styles.scoreName}>
+                  {p.displayName}
+                  {p.playerId === activePlayerId ? ' •' : ''}
+                </Text>
+                <Text style={styles.scoreValue}>{scoreMap[p.playerId] ?? 0}/5</Text>
               </View>
             ))}
           </View>
+
+          <Text style={styles.myScore}>Your lines: {myScore} / 5</Text>
+
+          <Divider style={styles.rule} />
+
+          {/* Call history */}
+          <View style={styles.callHistoryContainer}>
+            <Text style={styles.callHistoryTitle}>Called ({calledNumbers.length}/25)</Text>
+            <View style={styles.callHistoryGrid}>
+              {[...calledNumbers].reverse().map((n, i) => (
+                <View key={i} style={styles.calledChip}>
+                  <Text style={styles.calledChipText}>{n}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.footer}>
+            <Divider thick />
+            <Text style={styles.footerText}>Solidus Bingo — Practice Edition</Text>
+          </View>
         </ScrollView>
       </View>
-    </View>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1a1a2e' },
-  loading: { flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#aaaaaa', fontSize: 14 },
-  leaveTop: { paddingHorizontal: 16, paddingBottom: 4 },
-  leaveTopText: { color: '#6c63ff', fontSize: 14 },
+  container: { flex: 1 },
+  scroll: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingBottom: spacing.xl },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
+  loadingText: { fontFamily: fonts.bodyItalic, color: colors.inkFaded, fontSize: 14 },
+  leaveTop: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingBottom: spacing.xs,
+  },
+  leaveTopText: { fontFamily: fonts.bodyBold, color: colors.inkFaded, fontSize: 14 },
   turnBanner: {
-    backgroundColor: '#2a2a40', paddingVertical: 12,
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
+    paddingTop: spacing.md, paddingBottom: spacing.md,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: spacing.xs,
   },
-  myTurnBanner: { backgroundColor: '#1a2a1a' },
-  turnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  boardContainer: { padding: 16, alignItems: 'center' },
-  board: { width: 320, flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  turnDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.inkFaint },
+  turnDotActive: { backgroundColor: colors.accent },
+  turnText: {
+    fontFamily: fonts.headlineBold, fontSize: 18, color: colors.inkFaded,
+  },
+  turnTextActive: { fontFamily: fonts.headlineBlack, color: colors.accent },
+  turnRule: { marginHorizontal: spacing.lg },
+  boardContainer: { padding: spacing.lg, paddingTop: spacing.xl, alignItems: 'center' },
+  boardCard: {
+    padding: spacing.sm,
+    borderWidth: 2,
+    shadowColor: colors.ink,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  board: { width: BOARD_SIZE, flexDirection: 'row', flexWrap: 'wrap', gap: BOARD_GAP },
   cell: {
-    width: 60, height: 60, backgroundColor: '#2a2a40',
-    borderRadius: 8, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#3a3a55',
+    width: BOARD_CELL, height: BOARD_CELL, backgroundColor: colors.paperMuted,
+    borderRadius: radius.hairline, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: colors.rule,
   },
-  cellCut: { backgroundColor: '#1a3a2a', borderColor: '#00cc88' },
-  cellCallable: { borderColor: '#6c63ff' },
-  cellText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
-  cellTextCut: { color: '#00cc88' },
-  scoresContainer: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, flexWrap: 'wrap' },
+  cellCut: { backgroundColor: colors.paperDark, borderColor: colors.success },
+  cellCallable: { borderColor: colors.accent, borderWidth: 2 },
+  cellText: { fontFamily: fonts.headlineBold, color: colors.ink, fontSize: 20 },
+  cellTextCut: { color: colors.success, textDecorationLine: 'line-through' },
+  cutMark: { position: 'absolute', top: 2, right: 2 },
+  scoresContainer: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, flexWrap: 'wrap' },
   scoreItem: {
-    backgroundColor: '#2a2a40', borderRadius: 8, padding: 10,
+    backgroundColor: colors.paperMuted, borderRadius: radius.hairline, padding: 10,
     alignItems: 'center', flex: 1, minWidth: 80,
+    borderWidth: 1, borderColor: colors.ruleFaint,
   },
-  myScoreItem: { borderWidth: 1, borderColor: '#6c63ff' },
-  scoreName: { color: '#aaaaaa', fontSize: 11 },
-  scoreValue: { color: '#ffffff', fontSize: 18, fontWeight: 'bold', marginTop: 2 },
-  myScore: { color: '#aaaaaa', textAlign: 'center', fontSize: 13, paddingVertical: 4 },
-  callHistoryContainer: { padding: 16, gap: 6 },
-  callHistoryTitle: { color: '#888888', fontSize: 12 },
-  callHistoryRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
-  calledChip: { backgroundColor: '#2a2a40', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6 },
-  calledChipText: { color: '#cccccc', fontSize: 14, fontWeight: '600' },
+  myScoreItem: { borderWidth: 1.5, borderColor: colors.accent },
+  scoreName: { fontFamily: fonts.body, color: colors.inkFaded, fontSize: 11 },
+  scoreValue: { fontFamily: fonts.headlineBold, color: colors.ink, fontSize: 18, marginTop: 2 },
+  myScore: { fontFamily: fonts.bodyItalic, color: colors.inkFaded, textAlign: 'center', fontSize: 13, paddingVertical: 4 },
+  rule: { marginHorizontal: spacing.lg },
+  callHistoryContainer: { padding: spacing.lg, gap: spacing.sm },
+  callHistoryTitle: {
+    fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
+    color: colors.inkFaded,
+  },
+  callHistoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  calledChip: {
+    backgroundColor: colors.paperMuted, borderWidth: 1, borderColor: colors.ruleFaint,
+    paddingHorizontal: 12, paddingVertical: 8, minWidth: 44, alignItems: 'center',
+  },
+  calledChipText: { fontFamily: fonts.bodyBold, color: colors.ink, fontSize: 15 },
+  footer: { marginTop: 'auto', paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xs },
+  footerText: {
+    fontFamily: fonts.bodyItalic, fontSize: 12, color: colors.inkFaint, textAlign: 'center',
+  },
 })

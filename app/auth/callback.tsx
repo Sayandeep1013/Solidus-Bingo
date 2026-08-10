@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react'
 import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { useAuth } from '@/context/AuthContext'
+import { colors } from '@/theme'
 
 export default function AuthCallback() {
   const router = useRouter()
@@ -57,7 +58,7 @@ export default function AuthCallback() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#6c63ff" />
+      <ActivityIndicator size="large" color={colors.accent} />
     </View>
   )
 }
@@ -67,6 +68,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.paper,
   },
 })

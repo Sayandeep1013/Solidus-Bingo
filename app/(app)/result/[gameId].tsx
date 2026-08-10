@@ -4,13 +4,17 @@
  * Shows win/loss/draw result and Play Again / Leave buttons.
  * Draw (ABANDONED) → "No Winner — Draw"
  */
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useEffect } from 'react'
+import { Text, View, StyleSheet } from 'react-native'
 import { router } from 'expo-router'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { useAuth } from '@/context/AuthContext'
 import { useGameStore } from '@/store/gameStore'
 import { useRoomStore } from '@/store/roomStore'
 import { resetGameStore } from '@/store'
 import { invokeEdgeFunction } from '@/lib/invokeEdgeFunction'
+import { colors, fonts, spacing, KICKER_LETTER_SPACING } from '@/theme'
+import { PaperBackground, NewsButton, NewsCard, Divider } from '@/components/news'
 
 export default function ResultScreen() {
   const { userId } = useAuth()
@@ -23,6 +27,18 @@ export default function ResultScreen() {
 
   const isWinner = winnerId === userId
   const isDraw = gameStatus === 'ABANDONED'
+
+  // A player who's live and present when a game ends lands here directly via
+  // the GameScreen FINISHED/ABANDONED redirect — they've already "seen" the
+  // result, so it should never also surface as a "while you were away"
+  // notification on Home. Without this, every game (even ones watched live)
+  // would sit unacknowledged until dismissed from Home — spec
+  // bingo-disconnect-recovery §3.8.3-3.8.4.
+  useEffect(() => {
+    if (roomId) {
+      invokeEdgeFunction('acknowledge-result', { body: { room_id: roomId } })
+    }
+  }, [roomId])
 
   const handlePlayAgain = async () => {
     if (!roomId || !gameNumber) return
@@ -42,100 +58,86 @@ export default function ResultScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.resultCard}>
-        {isDraw ? (
-          <>
-            <Text style={styles.drawEmoji}>🤝</Text>
-            <Text style={styles.resultTitle}>No Winner</Text>
-            <Text style={styles.resultSubtitle}>It&apos;s a draw — all 25 numbers called!</Text>
-          </>
-        ) : isWinner ? (
-          <>
-            <Text style={styles.winEmoji}>🏆</Text>
-            <Text style={styles.resultTitle}>You Win!</Text>
-            <Text style={styles.resultSubtitle}>
-              Winning call: {winningCall}
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.loseEmoji}>😔</Text>
-            <Text style={styles.resultTitle}>You Lost</Text>
-            <Text style={styles.resultSubtitle}>
-              Better luck next time!
-            </Text>
-          </>
-        )}
-      </View>
+    <PaperBackground>
+      <View style={styles.container}>
+        <NewsCard style={styles.resultCard}>
+          {isDraw ? (
+            <>
+              <MaterialCommunityIcons name="handshake-outline" size={52} color={colors.inkFaded} />
+              <Text style={styles.kicker}>Final Edition</Text>
+              <Text style={styles.resultTitle}>Stalemate</Text>
+              <Text style={styles.resultSubtitle}>It&apos;s a draw — all 25 numbers called!</Text>
+            </>
+          ) : isWinner ? (
+            <>
+              <Ionicons name="trophy" size={52} color={colors.accent} />
+              <Text style={styles.kicker}>Final Edition</Text>
+              <Text style={styles.resultTitle}>Victory!</Text>
+              <Text style={styles.resultSubtitle}>Winning call: {winningCall}</Text>
+            </>
+          ) : (
+            <>
+              <MaterialCommunityIcons name="emoticon-sad-outline" size={52} color={colors.inkFaded} />
+              <Text style={styles.kicker}>Final Edition</Text>
+              <Text style={styles.resultTitle}>Defeat</Text>
+              <Text style={styles.resultSubtitle}>Better luck next time!</Text>
+            </>
+          )}
+        </NewsCard>
 
-      {/* Final scores */}
-      <View style={styles.scoresContainer}>
-        <Text style={styles.scoresTitle}>Final Scores</Text>
-        {Object.entries(scoreMap).map(([pId, score]) => (
-          <View key={pId} style={styles.scoreRow}>
-            <Text style={styles.scoreLabel}>
-              {pId === userId ? 'You' : 'Opponent'}
-              {pId === winnerId ? ' 🏆' : ''}
-            </Text>
-            <Text style={styles.scoreValue}>{score} lines</Text>
-          </View>
-        ))}
-      </View>
+        {/* Final scores */}
+        <View style={styles.scoresContainer}>
+          <Text style={styles.scoresTitle}>Final Scores</Text>
+          <Divider />
+          {Object.entries(scoreMap).map(([pId, score], i) => (
+            <View key={pId}>
+              {i > 0 ? <Divider style={styles.rowRule} /> : null}
+              <View style={styles.scoreRow}>
+                <View style={styles.scoreLabelRow}>
+                  <Text style={styles.scoreLabel}>{pId === userId ? 'You' : 'Opponent'}</Text>
+                  {pId === winnerId ? <Ionicons name="trophy" size={14} color={colors.accent} /> : null}
+                </View>
+                <Text style={styles.scoreValue}>{score} lines</Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.playAgainButton}
-          onPress={handlePlayAgain}
-          accessibilityRole="button"
-          accessibilityLabel="Play again"
-        >
-          <Text style={styles.playAgainText}>Play Again</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.leaveButton}
-          onPress={handleLeave}
-          accessibilityRole="button"
-          accessibilityLabel="Leave"
-        >
-          <Text style={styles.leaveText}>Leave</Text>
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <NewsButton label="Play Again" onPress={handlePlayAgain} variant="accent" accessibilityLabel="Play again" />
+          <NewsButton label="Leave" onPress={handleLeave} variant="plain" accessibilityLabel="Leave" />
+        </View>
       </View>
-    </View>
+    </PaperBackground>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: '#1a1a2e',
-    paddingHorizontal: 24, justifyContent: 'center', gap: 24,
+    flex: 1,
+    paddingHorizontal: 24, justifyContent: 'center', gap: spacing.lg,
   },
   resultCard: {
-    backgroundColor: '#2a2a40', borderRadius: 16, padding: 32,
-    alignItems: 'center', gap: 8,
+    alignItems: 'center', gap: 6, paddingVertical: 32,
   },
-  winEmoji: { fontSize: 56 },
-  loseEmoji: { fontSize: 56 },
-  drawEmoji: { fontSize: 56 },
-  resultTitle: { fontSize: 32, fontWeight: 'bold', color: '#ffffff' },
-  resultSubtitle: { fontSize: 15, color: '#aaaaaa', textAlign: 'center' },
-  scoresContainer: { gap: 8 },
-  scoresTitle: { color: '#888888', fontSize: 13, textTransform: 'uppercase' },
+  kicker: {
+    fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
+    color: colors.inkFaded, marginTop: spacing.sm,
+  },
+  resultTitle: { fontFamily: fonts.headlineBlack, fontSize: 36, color: colors.ink },
+  resultSubtitle: { fontFamily: fonts.bodyItalic, fontSize: 15, color: colors.inkFaded, textAlign: 'center' },
+  scoresContainer: { gap: spacing.xs },
+  scoresTitle: {
+    fontFamily: fonts.bodyBold, color: colors.inkFaded, fontSize: 12,
+    letterSpacing: KICKER_LETTER_SPACING,
+  },
+  rowRule: { marginVertical: 2 },
   scoreRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    backgroundColor: '#2a2a40', borderRadius: 8, padding: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10,
   },
-  scoreLabel: { color: '#ffffff', fontSize: 15 },
-  scoreValue: { color: '#6c63ff', fontSize: 15, fontWeight: '700' },
-  actions: { gap: 10 },
-  playAgainButton: {
-    backgroundColor: '#6c63ff', borderRadius: 10, paddingVertical: 16, alignItems: 'center',
-  },
-  playAgainText: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
-  leaveButton: {
-    backgroundColor: '#2a2a40', borderRadius: 10, paddingVertical: 14, alignItems: 'center',
-    borderWidth: 1, borderColor: '#3a3a55',
-  },
-  leaveText: { color: '#cc4444', fontSize: 16 },
+  scoreLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  scoreLabel: { fontFamily: fonts.body, color: colors.ink, fontSize: 15 },
+  scoreValue: { fontFamily: fonts.bodyBold, color: colors.accent, fontSize: 15 },
+  actions: { gap: spacing.sm },
 })

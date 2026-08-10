@@ -1,92 +1,100 @@
 # Solidus Bingo — Security Notes
 
 Written during the "get functionality right first, security later" phase explicitly
-requested for this friends-and-family project. Nothing below was treated as urgent
-during that phase, per that instruction — but **read the first section now**, because
-it's not a "before you go public" item. It's already true today.
+requested for this friends-and-family project — so nothing here was treated as urgent
+to fix during that phase. Read before any future public release.
+
+This audit specifically answers: **is anything hardcoded directly in the app's own
+client-side code** — i.e. baked into the JS bundle that ships inside the installed
+APK, extractable by anyone who unzips/decompiles it, regardless of whether they can
+see the GitHub repo at all.
 
 ---
 
-## 1. Already exposed today — the GitHub repo is public
+## 1. Hardcoded directly in the app's client code (ships inside the APK)
 
-`github.com/Sayandeep1013/Solidus-Bingo` is a **public** repository (confirmed via the
-GitHub API while writing this doc). Anything committed to it is visible to anyone right
-now, not just after some future "release."
-
-Two real credentials are currently committed in plain text:
-
-| What | Where | Value | Real-world risk today |
+| What | File | Bundled into which builds | Risk |
 |---|---|---|---|
-| QA test account password | `eas.json` (`development`/`preview` `env` blocks), `.env.local`* | `Testing123!Bingo` | Anyone can sign in as `testbot1..4@solidusbingo.test`. These accounts have **no elevated privileges** — they're normal player accounts, same RLS as everyone else. Worst case: someone plays a ranked game as "TestBot2" and pollutes the leaderboard with a fake result. |
-| Seed-endpoint shared token | `supabase/functions/dev-seed-test-accounts/index.ts` | `solidus-bingo-qa-seed` | Lets anyone re-invoke the account-seeding function. It's idempotent (no-ops if the 4 accounts already exist) and only touches those 4 fixed accounts — can't create arbitrary users or touch real player data. |
+| QA test-account password (`Testing123!Bingo`) | `src/lib/testAccounts.ts` reads it from `EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD` | **development and preview only** — this env var is set in `eas.json`'s `development`/`preview` profiles but deliberately absent from `production`, so a production/store build never has it. A **preview** APK (the kind you'd hand to a friend to test) *does* have the plaintext password compiled directly into its JS bundle. | Low — these 4 accounts (`testbot1..4@solidusbingo.test`) have no elevated privilege, same RLS as any player. |
+| QA test-account **emails** | `src/lib/testAccounts.ts`, `TEST_ACCOUNTS` array | **Every build, including production.** The module is imported unconditionally by the login screen (only the *button that uses it* is hidden behind the env flag), so the 4 email addresses themselves are literal strings in every shipped bundle, even though the password needed to actually sign in as them is empty/absent in production. | Very low — just 4 email addresses, no working credential alongside them in a production build. |
+| Supabase project URL + anon key | `.env.local` → inlined via `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Every build, including production. | **By design, not a bug** — see §3. |
 
-\* `.env.local` itself is gitignored and was never committed — but the **same literal
-value** is also in `eas.json`, which *is* committed, so the password is exposed via that
-file regardless.
+**What is correctly absent from the app's client code** (checked every source file, not
+just grepped for the word "secret"): `SUPABASE_SERVICE_ROLE_KEY` and
+`GOOGLE_CLIENT_SECRET` never appear anywhere under `src/`, `app/`, or any file that
+gets bundled into the app. They're referenced only inside `supabase/functions/*` —
+Edge Function code that runs on Supabase's own servers and is never shipped to a
+device at all.
 
-**Fix before any real public launch** (not needed for friends-and-family testing):
-- Rotate `EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD` to a new value, update it in `.env.local`
-  and `eas.json`, and re-run `dev-seed-test-accounts` to reset the 4 accounts' passwords
-  (or delete them and reseed).
-- Make the repo private, or move `eas.json`'s `env` values to EAS's own secret store
-  (`eas secret:create`) instead of the committed file, and rotate the seed token similarly.
-- Simplest alternative if you don't want to manage this at all: delete the 4 test
-  accounts and the `dev-seed-test-accounts` function once you're done with the
-  `autonomous-mobile-qa` testing workflow, and stop shipping `EXPO_PUBLIC_ENABLE_TEST_LOGIN`
-  in any build profile.
+**Fix before any real public launch** (skip for friends-and-family testing):
+- Rotate `EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD`, or simplest: once you're done using the
+  `autonomous-mobile-qa` testing workflow, delete the 4 test accounts, delete
+  `src/lib/testAccounts.ts` and the "Dev Test Login" UI in `login.tsx`, and stop setting
+  `EXPO_PUBLIC_ENABLE_TEST_LOGIN` anywhere. That removes both rows above entirely rather
+  than just rotating them.
 
 ---
 
-## 2. Correctly NOT exposed (verified, not just assumed)
+## 2. Also hardcoded in the repo, but server-side only — never shipped to the app
 
-Checked `git log --all -p` across the full history, not just the current tree — these
-have never been committed at any point:
+Different risk category from §1: this code runs on Supabase's infrastructure and is
+never part of the app bundle a player installs. Still worth knowing, since the repo is
+public (see §4) so the *source* is visible even though it never reaches a device:
 
-- **`SUPABASE_SERVICE_ROLE_KEY`** — only ever referenced as `Deno.env.get(...)` inside
-  Edge Functions (which run server-side on Supabase's infrastructure); the actual value
-  lives only in Supabase's own Edge Function environment, never in this repo or the app bundle.
-- **`GOOGLE_CLIENT_SECRET`** — never in code; lives only in the Supabase dashboard's Auth
-  provider settings, per `AUTH_SETUP_GUIDE.md`.
-- **`.env.local`** — gitignored (`.gitignore:...:.env.local`, verified with
-  `git check-ignore -v`), never committed.
+| What | File | Value |
+|---|---|---|
+| Seed-endpoint shared token | `supabase/functions/dev-seed-test-accounts/index.ts` | `solidus-bingo-qa-seed` — lets anyone re-invoke the account-seeding function. Idempotent, only touches the 4 fixed test accounts. |
+| Same test-account password, server-side copy | same file | Used when creating the 4 accounts via the Auth Admin API. Must match §1's client-side value for test-login to work — rotate both together if you rotate one. |
+
+---
 
 ## 3. Exposed by design (this is normal, not a bug)
 
-- **`EXPO_PUBLIC_SUPABASE_URL`** and **`EXPO_PUBLIC_SUPABASE_ANON_KEY`** are baked into
-  every built APK and are meant to be public — this is how Supabase's client model works.
-  The anon key alone grants nothing; every table's Row Level Security policy is the
-  actual boundary. This is fine as long as RLS stays correct (see next section).
+`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are meant to be public —
+this is how every Supabase client app works. The anon key alone grants nothing; every
+table's Row Level Security policy is the actual security boundary, not secrecy of this
+key. This is fine as long as RLS stays correct — see §5.
 
-## 4. Real gaps worth closing before any wider release (found via Supabase's own advisor tool)
+---
 
-These aren't secrets, but they're the kind of thing that matters once this stops being
-just-friends-and-family:
+## 4. Separate issue: the GitHub repo itself is public
 
-- **Leaked password protection is disabled** in Supabase Auth — Supabase can check
-  new passwords against HaveIBeenPwned and currently doesn't. One toggle in the
-  dashboard (Authentication → Policies) to turn on before real users pick real passwords.
-- **A handful of `SECURITY DEFINER` SQL functions** (`is_room_member`,
-  `handle_new_user`, `game_room_id`) are callable directly via the REST API
-  (`/rest/v1/rpc/...`) by anyone, including unauthenticated (`anon`) requests. In
-  practice these are read-only/trigger helpers that don't leak anything sensitive
-  (they return booleans/UUIDs derivable from already-public-ish room membership), but
-  they weren't *intended* as a public API surface — worth explicitly setting
-  `REVOKE EXECUTE ... FROM anon, authenticated` on them if this ever needs a tighter
-  security posture, or leaving as-is if the current behavior (derivable, non-sensitive
-  data) is judged acceptable.
-- Several functions have a mutable `search_path` (a Postgres hardening best-practice,
-  not a known active exploit here) — fix is a one-line `SET search_path = public` added
-  to each function definition.
+Not an "in-app code" finding, but worth knowing since it changes urgency: confirmed via
+the GitHub API that `github.com/Sayandeep1013/Solidus-Bingo` is a **public** repository.
+Everything in §1 and §2 is visible to anyone browsing the repo right now, not just to
+someone who decompiles a built APK. Checked `git log --all -p` across the *entire*
+history (not just the current tree) — no service role key or Google client secret has
+ever been committed, at any point.
 
-Run `mcp__supabase__get_advisors` (security + performance) again before any public
-launch — this list reflects the state as of this session and could drift as the schema
-changes.
+---
+
+## 5. Real gaps worth closing before any wider release (from Supabase's own advisor tool)
+
+Not secrets, but the kind of thing that matters once this stops being just-friends-and-family:
+
+- **Leaked password protection is disabled** in Supabase Auth (checks new passwords
+  against HaveIBeenPwned). One toggle in the dashboard (Authentication → Policies)
+  before real users pick real passwords.
+- **A few `SECURITY DEFINER` SQL functions** (`is_room_member`, `handle_new_user`,
+  `game_room_id`) are callable directly via the REST API (`/rest/v1/rpc/...`) by
+  anyone, including unauthenticated requests. In practice they only return
+  booleans/UUIDs derivable from already-visible room membership — not sensitive — but
+  they weren't *intended* as a public API surface. Worth `REVOKE EXECUTE ... FROM anon,
+  authenticated` on them if this ever needs a tighter posture.
+- Several functions have a mutable `search_path` (a Postgres hardening best practice,
+  not a known active exploit) — fix is adding `SET search_path = public` to each.
+
+Re-run `mcp__supabase__get_advisors` (security + performance) before any public
+launch — this reflects the state as of this session and can drift as the schema changes.
 
 ---
 
 ## Summary if you're skimming
 
-**Do before going public, not urgent now:** rotate the test-account password and seed
-token (section 1), or just delete the test-login machinery once mobile QA is done.
-**Already fine:** service role key, Google client secret, `.env.local` — never leaked.
-**Worth a look eventually:** the two Supabase Auth/RLS hardening items in section 4.
+**In the app's own code, ships in preview builds:** the test-account password
+(`testAccounts.ts` / `EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD`) — low real-world impact, but
+real. **Production builds never include it.** **Already fine:** service role key,
+Google client secret — never in any file the app bundles, verified across full git
+history too. **Also true:** the repo itself is public, so source-level exposure exists
+independent of what's compiled into any build. **Worth a look eventually:** the two
+Supabase Auth/RLS hardening items in §5.

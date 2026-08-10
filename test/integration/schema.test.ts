@@ -268,17 +268,8 @@ describe('RLS Policy Tests', () => {
   // Req 6.23 — direct INSERT into rooms with anon key is rejected
   test('Req 6.23 — authenticated user cannot directly INSERT into rooms', async () => {
     const u = await createTestUser(`rls-test-${Date.now()}@test.com`)
-    const anonClient = createClient(URL, ANON_KEY, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${(await admin.auth.admin.generateLink({
-            type: 'magiclink', email: u.email!,
-          })).data.properties?.action_link ?? ''}`,
-        },
-      },
-    })
 
-    // A simpler test: anon key without auth cannot insert
+    // Anon key without auth cannot insert
     const unauthClient = createClient(URL, ANON_KEY)
     const { error } = await unauthClient.from('rooms').insert({
       code: 'RLSTST', host_id: u.id, capacity: 2, status: 'WAITING',
@@ -313,7 +304,7 @@ describe('RLS Policy Tests', () => {
     // Attempting to delete a user who is a host should fail due to ON DELETE RESTRICT
     // (We test this via profile delete — the auth.users cascade triggers profile delete,
     //  which then hits the RESTRICT on rooms.host_id)
-    const { error } = await admin.auth.admin.deleteUser(u.id)
+    await admin.auth.admin.deleteUser(u.id)
     // This may or may not error depending on Supabase version — document the constraint
     // The important thing is rooms.host_id has ON DELETE RESTRICT in the migration
     // This test documents the intent; actual enforcement verified via migration review

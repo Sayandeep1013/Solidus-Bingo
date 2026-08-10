@@ -10,9 +10,14 @@
  *
  * Usage:
  *   node mobile-qa/simulate-players.mjs join-room <ROOMCODE> <account>
- *   node mobile-qa/simulate-players.mjs ranked-queue <account> <capacity>
+ *   node mobile-qa/simulate-players.mjs ranked-queue <account> <capacity> <timeBankMs>
  *   node mobile-qa/simulate-players.mjs leave-queue <account>
  *   node mobile-qa/simulate-players.mjs call-number <account> <gameId> <number> <sequence>
+ *   node mobile-qa/simulate-players.mjs claim-forfeit-win <account> <gameId>
+ *   node mobile-qa/simulate-players.mjs claim-timeout-win <account> <gameId>
+ *   node mobile-qa/simulate-players.mjs cast-forfeit-vote <account> <voteId> <YES|NO>
+ *   node mobile-qa/simulate-players.mjs cancel-forfeit-vote <account> <voteId>
+ *   node mobile-qa/simulate-players.mjs initiate-disconnect <account> <gameId> <disconnectedPlayerId>
  *
  * <account> is a short key: testbot1, testbot2, testbot3, or testbot4
  * (maps to testbot{N}@solidusbingo.test — see TEST_ACCOUNTS below, kept in
@@ -100,11 +105,12 @@ async function main() {
       break
     }
     case 'ranked-queue': {
-      const [accountKey, capacityStr] = args
+      const [accountKey, capacityStr, timeBankMsStr] = args
       const capacity = Number(capacityStr)
-      if (!accountKey || ![2, 3, 4].includes(capacity)) throw new Error('Usage: ranked-queue <account> <2|3|4>')
+      const timeBankMs = Number(timeBankMsStr ?? 300_000)
+      if (!accountKey || ![2, 3, 4].includes(capacity)) throw new Error('Usage: ranked-queue <account> <2|3|4> [timeBankMs]')
       await signIn(supabase, accountKey)
-      const result = await invoke(supabase, 'join-queue', { capacity })
+      const result = await invoke(supabase, 'join-queue', { capacity, time_bank_ms: timeBankMs })
       console.log(JSON.stringify(result, null, 2))
       break
     }
@@ -127,6 +133,52 @@ async function main() {
         number: Number(numberStr),
         sequence: Number(sequenceStr),
       })
+      console.log(JSON.stringify(result, null, 2))
+      break
+    }
+    case 'claim-forfeit-win': {
+      const [accountKey, gameId] = args
+      if (!accountKey || !gameId) throw new Error('Usage: claim-forfeit-win <account> <gameId>')
+      await signIn(supabase, accountKey)
+      const result = await invoke(supabase, 'claim-forfeit-win', { game_id: gameId })
+      console.log(JSON.stringify(result, null, 2))
+      break
+    }
+    case 'claim-timeout-win': {
+      const [accountKey, gameId] = args
+      if (!accountKey || !gameId) throw new Error('Usage: claim-timeout-win <account> <gameId>')
+      await signIn(supabase, accountKey)
+      const result = await invoke(supabase, 'claim-timeout-win', { game_id: gameId })
+      console.log(JSON.stringify(result, null, 2))
+      break
+    }
+    case 'cast-forfeit-vote': {
+      const [accountKey, voteId, choice] = args
+      if (!accountKey || !voteId || (choice !== 'YES' && choice !== 'NO')) {
+        throw new Error('Usage: cast-forfeit-vote <account> <voteId> <YES|NO>')
+      }
+      await signIn(supabase, accountKey)
+      const result = await invoke(supabase, 'cast-forfeit-vote', { vote_id: voteId, choice })
+      console.log(JSON.stringify(result, null, 2))
+      break
+    }
+    case 'initiate-disconnect': {
+      const [accountKey, gameId, disconnectedPlayerId] = args
+      if (!accountKey || !gameId || !disconnectedPlayerId) {
+        throw new Error('Usage: initiate-disconnect <account> <gameId> <disconnectedPlayerId>')
+      }
+      await signIn(supabase, accountKey)
+      const result = await invoke(supabase, 'initiate-disconnect-resolution', {
+        game_id: gameId, disconnected_player_id: disconnectedPlayerId,
+      })
+      console.log(JSON.stringify(result, null, 2))
+      break
+    }
+    case 'cancel-forfeit-vote': {
+      const [accountKey, voteId] = args
+      if (!accountKey || !voteId) throw new Error('Usage: cancel-forfeit-vote <account> <voteId>')
+      await signIn(supabase, accountKey)
+      const result = await invoke(supabase, 'cancel-forfeit-vote', { vote_id: voteId })
       console.log(JSON.stringify(result, null, 2))
       break
     }

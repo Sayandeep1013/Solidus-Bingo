@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
   // ── Fetch game ────────────────────────────────────────────────────────────
   const { data: game, error: gameError } = await admin
     .from('games')
-    .select('id, room_id, status, active_player_id, winner_id, winning_call, game_number, started_at, finished_at')
+    .select('id, room_id, status, active_player_id, winner_id, winning_call, game_number, started_at, finished_at, turn_started_at')
     .eq('id', gameId)
     .single()
 
@@ -111,10 +111,10 @@ Deno.serve(async (req: Request) => {
       .eq('game_id', gameId)
       .order('sequence', { ascending: true }),
 
-    // All players' scores and turn orders
+    // All players' scores, turn orders, remaining time bank, and rotation state
     admin
       .from('game_players')
-      .select('player_id, score, turn_order')
+      .select('player_id, score, turn_order, time_remaining_ms, is_out, bot_controlled')
       .eq('game_id', gameId),
 
     // All completed lines (all players — needed for board rendering)
@@ -134,9 +134,15 @@ Deno.serve(async (req: Request) => {
   // ── Build scores map ──────────────────────────────────────────────────────
   const scores: Record<string, number> = {}
   const turnOrders: Record<string, number> = {}
+  const timeRemainingMs: Record<string, number> = {}
+  const outPlayers: Record<string, boolean> = {}
+  const botControlled: Record<string, boolean> = {}
   for (const gp of players ?? []) {
     scores[gp.player_id] = gp.score
     turnOrders[gp.player_id] = gp.turn_order
+    timeRemainingMs[gp.player_id] = gp.time_remaining_ms
+    outPlayers[gp.player_id] = gp.is_out
+    botControlled[gp.player_id] = gp.bot_controlled
   }
 
   // ── Build completed lines grouped by player ───────────────────────────────
@@ -156,6 +162,7 @@ Deno.serve(async (req: Request) => {
     winning_call: game.winning_call,
     started_at: game.started_at,
     finished_at: game.finished_at,
+    turn_started_at: game.turn_started_at,
 
     // Caller's private board (null if game not yet started)
     my_board: myBoard?.layout ?? null,
@@ -170,6 +177,9 @@ Deno.serve(async (req: Request) => {
 
     scores,
     turn_orders: turnOrders,
+    time_remaining_ms: timeRemainingMs,
+    out_players: outPlayers,
+    bot_controlled: botControlled,
     completed_lines: linesByPlayer,
 
     // Result (only present when game is finished)

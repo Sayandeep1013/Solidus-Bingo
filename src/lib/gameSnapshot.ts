@@ -25,12 +25,16 @@ export function applyGameSnapshot(snapshot: any): void {
   useGameStore.getState().setGameActive({
     gameId: snapshot.game_id,
     gameNumber: snapshot.game_number ?? null,
-    myBoard: snapshot.my_board ?? [],
+    myBoard: snapshot.my_board ?? null,
     activePlayerId: snapshot.active_player_id,
     initialScores: snapshot.scores ?? {},
     initialCalledNumbers: (snapshot.calls ?? []).map((c: { number: number }) => c.number),
     initialCompletedLines: completedLines,
     lastCallSequence: snapshot.calls?.length ?? 0,
+    turnStartedAt: snapshot.turn_started_at ?? null,
+    initialTimeRemainingMs: snapshot.time_remaining_ms ?? {},
+    initialOutPlayerIds: snapshot.out_players ?? {},
+    initialBotControlledPlayerIds: snapshot.bot_controlled ?? {},
   })
 
   if (snapshot.status === 'FINISHED' || snapshot.status === 'ABANDONED') {

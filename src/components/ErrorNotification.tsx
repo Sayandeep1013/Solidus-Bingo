@@ -10,6 +10,8 @@
  */
 import { useEffect, useRef } from 'react'
 import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { colors, fonts, radius } from '../theme'
 
 interface ErrorNotificationProps {
   message: string | null
@@ -62,7 +64,7 @@ export function ErrorNotification({
         accessibilityRole="button"
         accessibilityLabel="Dismiss error"
       >
-        <Text style={styles.dismissText}>✕</Text>
+        <Ionicons name="close" size={18} color={colors.paper} />
       </TouchableOpacity>
     </Animated.View>
   )
@@ -74,10 +76,10 @@ const styles = StyleSheet.create({
     bottom: 24,
     left: 16,
     right: 16,
-    backgroundColor: '#3d1a1a',
-    borderRadius: 10,
+    backgroundColor: colors.accent,
+    borderRadius: radius.hairline,
     borderWidth: 1,
-    borderColor: '#7a2020',
+    borderColor: colors.accentDark,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -90,17 +92,13 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    color: '#ff8888',
+    fontFamily: fonts.body,
+    color: colors.paper,
     fontSize: 14,
     lineHeight: 20,
   },
   dismiss: {
     paddingLeft: 12,
     paddingVertical: 4,
-  },
-  dismissText: {
-    color: '#ff8888',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 })

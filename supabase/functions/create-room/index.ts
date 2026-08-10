@@ -20,6 +20,10 @@ const CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTVWXYZ23456789' // 31 chars
 const CODE_LENGTH = 6
 const MAX_CODE_RETRIES = 10
 
+/** 3 / 5 / 10 / 15 / 30 minutes per player — spec bingo-disconnect-recovery §3.2 */
+const VALID_TIME_BANKS_MS = [180_000, 300_000, 600_000, 900_000, 1_800_000]
+const DEFAULT_TIME_BANK_MS = 300_000
+
 function generateRoomCode(): string {
   return Array.from(
     { length: CODE_LENGTH },
@@ -37,7 +41,7 @@ Deno.serve(async (req: Request) => {
   const { userId } = auth
 
   // ── Parse body ────────────────────────────────────────────────────────────
-  let body: { capacity?: unknown }
+  let body: { capacity?: unknown; time_bank_ms?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -49,11 +53,36 @@ Deno.serve(async (req: Request) => {
     return err('INVALID_CAPACITY', 'capacity must be 2, 3, or 4', 400)
   }
 
+  // Optional — defaults to 5 min/player so existing callers (and any future
+  // ones that don't care) don't have to specify it.
+  const timeBankMs = body.time_bank_ms === undefined ? DEFAULT_TIME_BANK_MS : body.time_bank_ms
+  if (!VALID_TIME_BANKS_MS.includes(timeBankMs as number)) {
+    return err('INVALID_TIME_BANK', `time_bank_ms must be one of: ${VALID_TIME_BANKS_MS.join(', ')}`, 400)
+  }
+
   // ── Service role client ───────────────────────────────────────────────────
   const admin = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
+
+  // ── Reject if already active in another game ──────────────────────────────
+  // join-queue has always had this check; create-room and join-room didn't,
+  // which meant a player stuck ACTIVE in one IN_GAME room could create (or
+  // join) a second one, compounding the "stuck game" problem instead of
+  // avoiding it — spec bingo-disconnect-recovery §3.9.
+  const { data: activeMemberships } = await admin
+    .from('room_players')
+    .select('rooms(status)')
+    .eq('player_id', userId)
+    .eq('status', 'ACTIVE')
+
+  const alreadyInGame = (activeMemberships ?? []).some(
+    (m) => (m.rooms as unknown as { status: string } | null)?.status === 'IN_GAME'
+  )
+  if (alreadyInGame) {
+    return err('ALREADY_IN_GAME', 'You are already in an active game', 409)
+  }
 
   // ── Generate unique room code with retry ──────────────────────────────────
   let code: string | null = null
@@ -85,8 +114,9 @@ Deno.serve(async (req: Request) => {
       host_id: userId,
       capacity,
       status: 'WAITING',
+      time_bank_ms: timeBankMs,
     })
-    .select('id, code, capacity, host_id, status')
+    .select('id, code, capacity, host_id, status, time_bank_ms')
     .single()
 
   if (roomError || !room) {
@@ -138,6 +168,7 @@ Deno.serve(async (req: Request) => {
     capacity: room.capacity,
     host_id: room.host_id,
     status: room.status,
+    time_bank_ms: room.time_bank_ms,
     players,
   })
 })

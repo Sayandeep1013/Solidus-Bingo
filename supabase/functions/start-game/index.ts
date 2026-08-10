@@ -71,7 +71,7 @@ Deno.serve(async (req: Request) => {
   // ── Fetch room ────────────────────────────────────────────────────────────
   const { data: room, error: roomError } = await admin
     .from('rooms')
-    .select('id, status, host_id, capacity')
+    .select('id, status, host_id, capacity, time_bank_ms')
     .eq('id', roomId)
     .single()
 
@@ -144,6 +144,12 @@ Deno.serve(async (req: Request) => {
   const firstPlayerId = players[firstPlayerIdx].player_id
 
   // ── Insert game row (ACTIVE — STARTING is transient and skipped for Realtime) ──
+  // turn_started_at seeds the chess clock for the first active player — spec
+  // bingo-disconnect-recovery §3.2. It's a distinct column from started_at
+  // (this game's creation time) and from updated_at (bumped by a trigger on
+  // every write, which would drift from "when did THIS turn actually begin"
+  // after any non-turn-changing update).
+  const now = new Date().toISOString()
   const { data: game, error: gameError } = await admin
     .from('games')
     .insert({
@@ -151,7 +157,8 @@ Deno.serve(async (req: Request) => {
       game_number: gameNumber,
       status: 'ACTIVE',
       active_player_id: firstPlayerId,
-      started_at: new Date().toISOString(),
+      started_at: now,
+      turn_started_at: now,
     })
     .select('id')
     .single()
@@ -162,11 +169,13 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Insert game_players (turn_order = join_order) ─────────────────────────
+  const timeBankMs = room.time_bank_ms as number
   const gamePlayers = players.map((p, i) => ({
     game_id: game.id,
     player_id: p.player_id,
     turn_order: i + 1,
     score: 0,
+    time_remaining_ms: timeBankMs,
   }))
 
   const { error: gpError } = await admin.from('game_players').insert(gamePlayers)
@@ -202,5 +211,7 @@ Deno.serve(async (req: Request) => {
     game_number: gameNumber,
     active_player_id: firstPlayerId,
     player_count: n,
+    time_bank_ms: timeBankMs,
+    turn_started_at: now,
   })
 })
