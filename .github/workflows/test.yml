@@ -27,6 +27,11 @@ name: CI
 on:
   push:
     branches: [main, develop, 'feature/**']
+    # Release tags too. A tag can point at any commit, including one no branch
+    # push ever covered, and a release is the moment you least want the full
+    # suite (integration + coverage) to have been skipped. The APK workflow
+    # gates itself on the fast checks; this runs the rest, for the record.
+    tags: ['v*']
   pull_request:
     branches: [main, develop]
 

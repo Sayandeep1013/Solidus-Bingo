@@ -14,6 +14,9 @@
 #   - Manual: Actions tab -> Build APK (GitHub) -> Run workflow
 #   - Push a tag matching v* (e.g. `git tag v1.0.1 && git push origin v1.0.1`)
 #
+# Either way the `verify` job below has to pass first — nothing gets signed and
+# published from code that fails lint or tests.
+#
 # Required repo secrets:
 #   ANDROID_KEYSTORE_BASE64    - base64 of the PKCS12 release keystore
 #   ANDROID_KEYSTORE_PASSWORD  - store password
@@ -29,8 +32,42 @@ on:
       - 'v*'
 
 jobs:
+  # Gate. Without this a tag could publish an APK built from a commit no test
+  # had ever run against: test.yml only fires on branch pushes, and this
+  # workflow built regardless. That is exactly what happened cutting v1.0.1 —
+  # CI went red on the branch while the tag build sailed through and published,
+  # and only luck decided the failure was in a test file rather than the app.
+  # The fast checks run here too so the tag itself is gated, not just the
+  # branch it happens to point at.
+  verify:
+    name: Verify (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+
+      - name: Unit tests + PBT
+        run: npm run test:unit
+
+      - name: Component tests
+        run: npm run test:component
+
   build:
     name: Build signed APK
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: write # needed to create the Release and upload the APK
