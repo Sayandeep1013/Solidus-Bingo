@@ -137,7 +137,12 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned instead of "latest" — resolving "latest" calls GitHub's
+          # release-list API unauthenticated, which hit a rate limit and
+          # failed the whole job (command not found, exit 127) the first
+          # time this pipeline actually ran. A pinned version fetches one
+          # known release directly, no listing call needed.
+          version: 2.113.0
 
       # Cache Supabase CLI between runs (spec Req 10.4)
       - name: Cache Supabase
