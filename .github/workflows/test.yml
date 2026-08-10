@@ -1,0 +1,221 @@
+# .github/workflows/test.yml
+#
+# Solidus Bingo CI Pipeline
+# Runs on every push and PR to main and develop.
+#
+# Job order (spec bingo-testing Req 10.2):
+#   1. lint         — tsc + ESLint
+#   2. test:unit    — unit tests + PBT (no Supabase required)
+#   3. test:component — React Native Testing Library
+#   4. test:integration — Edge Function + schema tests (requires supabase start)
+#   5. coverage     — threshold enforcement + artifact upload
+#
+# Spec refs: bingo-testing §Req 10, §Req 11
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  # Increase PBT runs in CI for more thorough property checking
+  FC_NUM_RUNS: 200
+  # Supabase local URL for integration tests
+  SUPABASE_URL: http://localhost:54321
+  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_LOCAL_ANON_KEY }}
+  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_LOCAL_SERVICE_ROLE_KEY }}
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Lint — TypeScript + ESLint
+  # ─────────────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+
+      # Spec bingo-testing Req 11.11 — verify .env.local is gitignored
+      - name: Verify .env.local is gitignored
+        run: |
+          if git check-ignore -q .env.local; then
+            echo ".env.local is correctly gitignored"
+          else
+            echo "ERROR: .env.local is NOT gitignored! Fix .gitignore immediately."
+            exit 1
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Unit tests + PBT
+  # ─────────────────────────────────────────────────────────────────────────
+  test-unit:
+    name: Unit Tests + PBT
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+        env:
+          FC_NUM_RUNS: ${{ env.FC_NUM_RUNS }}
+
+      # Spec bingo-testing Req 10.8 — log PBT seed on failure
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: test-results/
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 3: Component tests (React Native Testing Library)
+  # ─────────────────────────────────────────────────────────────────────────
+  test-component:
+    name: Component Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run component tests
+        run: npm run test:component
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 4: Integration tests (requires Supabase)
+  # ─────────────────────────────────────────────────────────────────────────
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-component]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Cache Supabase CLI between runs (spec Req 10.4)
+      - name: Cache Supabase
+        uses: actions/cache@v4
+        with:
+          path: ~/.supabase
+          key: supabase-${{ hashFiles('supabase/migrations/**') }}
+
+      - name: Start Supabase
+        run: supabase start
+        timeout-minutes: 3
+
+      # Spec Req 10.7 — fail with explicit error if Supabase doesn't start in 120s
+      - name: Wait for Supabase health check
+        run: |
+          for i in $(seq 1 24); do
+            if curl -sf http://localhost:54321/rest/v1/ -H "apikey: $SUPABASE_ANON_KEY" > /dev/null 2>&1; then
+              echo "Supabase is healthy"
+              exit 0
+            fi
+            echo "Waiting for Supabase... ($i/24)"
+            sleep 5
+          done
+          echo "ERROR: Supabase did not become healthy within 120 seconds"
+          exit 1
+
+      - name: Apply migrations
+        run: supabase db push
+
+      # Spec bingo-testing Req 11 — secret scan before integration tests
+      - name: Secret leak scan
+        run: |
+          npx expo export --platform android --dev false 2>&1 | \
+            grep -iE "service_role|client_secret|SUPABASE_SERVICE_ROLE|GOOGLE_CLIENT_SECRET" && \
+            { echo "SECRET LEAK DETECTED in bundle — aborting"; exit 1; } || \
+            echo "Secret scan passed"
+        continue-on-error: false
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 5: Coverage — threshold enforcement
+  # ─────────────────────────────────────────────────────────────────────────
+  coverage:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-component]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run coverage
+        run: npm run test:coverage
+        env:
+          FC_NUM_RUNS: ${{ env.FC_NUM_RUNS }}
+
+      # Spec Req 10.5 — upload Coverage_Report as CI artifact
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+      # Spec Req 10.6 — JUnit XML for per-test status
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: junit.xml

@@ -1,7 +1,43 @@
+# --- Expo / React Native ---
 node_modules/
-.next/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# --- Generated native projects (expo prebuild) — PREBUILD_CHECKLIST.md
+# regenerates these locally before every EAS build; never commit them ---
+/android/
+/ios/
+
+# --- Build output ---
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# --- Secrets — NEVER commit these ---
 .env
 .env.local
 .env.production
-dist/
-build/
+.env.staging
+*.env
+
+# --- EAS ---
+.easignore
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Jest / Coverage ---
+coverage/
+junit.xml
