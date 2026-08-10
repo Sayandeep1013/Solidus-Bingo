@@ -5,8 +5,14 @@
 # Supabase backend baked in) and publishes it as a GitHub Release asset.
 #
 # Triggers:
-#   - Push a tag matching v* (e.g. `git tag v1.0.1 && git push origin v1.0.1`)
-#   - Manual: Actions tab -> Release APK -> Run workflow
+#   - Manual only: Actions tab -> Release APK -> Run workflow
+#
+# Deliberately NOT triggered by v* tags. build-apk-github.yml owns those, and
+# when both were tag-triggered (v1.0.1) they ran against the same tag: two APKs
+# racing to attach themselves to one GitHub Release, and an EAS build burning
+# queue time and quota for an artifact nobody wanted. This is the fallback for
+# when the GitHub-native Gradle build is the thing that's broken, so it has to
+# be started deliberately.
 #
 # Requires a repo secret named EXPO_TOKEN (Settings -> Secrets and
 # variables -> Actions -> New repository secret). Generate one at
@@ -23,9 +29,6 @@ on:
         description: 'EAS build profile to use'
         required: false
         default: 'apk-release'
-  push:
-    tags:
-      - 'v*'
 
 jobs:
   build-and-release:
