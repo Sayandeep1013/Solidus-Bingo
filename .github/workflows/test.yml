@@ -169,8 +169,12 @@ jobs:
           echo "SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
 
-      - name: Apply migrations
-        run: supabase db push
+      # No separate "apply migrations" step: `supabase start` above already
+      # applies every file in supabase/migrations/ while bootstrapping the
+      # fresh local database. `supabase db push` (without --linked/--local)
+      # targets a *remote* linked project by default — this workflow never
+      # runs `supabase link`, so that call had nothing valid to push to and
+      # failed outright, on top of being redundant with `start`.
 
       # Spec bingo-testing Req 11 — secret scan before integration tests.
       # Scans the actual exported bundle files, not the export command's log
