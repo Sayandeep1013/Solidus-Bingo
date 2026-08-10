@@ -8,7 +8,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 
-const URL = process.env.SUPABASE_URL ?? 'http://localhost:54321'
+const URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const ANON_KEY = process.env.SUPABASE_ANON_KEY ?? ''
 

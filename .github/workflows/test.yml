@@ -37,7 +37,12 @@ env:
   # NOT secrets here — they're captured fresh from each run's own local
   # `supabase start` instance (see test-integration job) rather than stored
   # as repo secrets, so there's nothing to configure by hand.
-  SUPABASE_URL: http://localhost:54321
+  # 127.0.0.1, not "localhost" — Node can resolve "localhost" to the IPv6
+  # loopback (::1) first, but Docker's published ports only bind IPv4
+  # (127.0.0.1), so connections to "localhost" fail outright regardless of
+  # how long the retry budget is. `supabase status` itself reports its own
+  # API_URL as 127.0.0.1, confirming this is the canonical address.
+  SUPABASE_URL: http://127.0.0.1:54321
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
