@@ -13,9 +13,12 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 export default async function globalSetup() {
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-  // Verify Supabase is reachable
+  // Verify Supabase is reachable. Generous budget (~30s) — a CI runner
+  // fresh off `supabase start` can be briefly slow to answer even with
+  // nothing else contending for CPU.
+  const MAX_ATTEMPTS = 20
   let attempts = 0
-  while (attempts < 10) {
+  while (attempts < MAX_ATTEMPTS) {
     try {
       const { error } = await admin.from('profiles').select('id').limit(1)
       if (!error) break
@@ -23,10 +26,10 @@ export default async function globalSetup() {
       // not ready yet
     }
     attempts++
-    await new Promise((r) => setTimeout(r, 1000))
+    await new Promise((r) => setTimeout(r, 1500))
   }
 
-  if (attempts >= 10) {
+  if (attempts >= MAX_ATTEMPTS) {
     throw new Error(
       'Integration test setup failed: Supabase is not reachable at ' + SUPABASE_URL +
       '\nRun `supabase start` before running integration tests.'

@@ -8,8 +8,17 @@
 #   1. lint         — tsc + ESLint
 #   2. test:unit    — unit tests + PBT (no Supabase required)
 #   3. test:component — React Native Testing Library
-#   4. test:integration — Edge Function + schema tests (requires supabase start)
-#   5. coverage     — threshold enforcement + artifact upload
+#   4. secret-scan  — exported-bundle secret leak check (standalone — see below)
+#   5. test:integration — Edge Function + schema tests (requires supabase start)
+#   6. coverage     — threshold enforcement + artifact upload
+#
+# secret-scan runs `expo export`, a single-threaded Metro bundle that's CPU-
+# heavy enough to starve the Supabase Postgres/Kong containers of CPU on a
+# standard 2-vCPU runner — it used to run *inside* the integration-tests job
+# right before the test suite, and that contention made Supabase's API
+# intermittently fail its ~10s reachability check immediately after, with no
+# real reachability problem. It doesn't need Supabase running at all, so it's
+# its own job now — removes the contention and runs in parallel besides.
 #
 # Spec refs: bingo-testing §Req 10, §Req 11
 
@@ -117,7 +126,40 @@ jobs:
         run: npm run test:component
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 4: Integration tests (requires Supabase)
+  # Job 4: Secret leak scan — standalone, no Supabase needed (see header note)
+  # ─────────────────────────────────────────────────────────────────────────
+  secret-scan:
+    name: Secret Leak Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Spec bingo-testing Req 11 — scans the actual exported bundle files,
+      # not the export command's log output — the JS bundle is written to
+      # disk, never printed to stdout, so grepping the command's output
+      # alone would never catch anything.
+      - name: Secret leak scan
+        run: |
+          npx expo export --platform android --output-dir /tmp/export-scan
+          if grep -raoE "service_role|client_secret|SUPABASE_SERVICE_ROLE|GOOGLE_CLIENT_SECRET" /tmp/export-scan/_expo/static/js/android/*.hbc; then
+            echo "SECRET LEAK DETECTED in exported bundle — aborting"
+            exit 1
+          fi
+          echo "Secret scan passed"
+          rm -rf /tmp/export-scan
+        continue-on-error: false
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 5: Integration tests (requires Supabase)
   # ─────────────────────────────────────────────────────────────────────────
   test-integration:
     name: Integration Tests
@@ -176,21 +218,6 @@ jobs:
       # runs `supabase link`, so that call had nothing valid to push to and
       # failed outright, on top of being redundant with `start`.
 
-      # Spec bingo-testing Req 11 — secret scan before integration tests.
-      # Scans the actual exported bundle files, not the export command's log
-      # output — the JS bundle is written to disk, never printed to stdout,
-      # so grepping the command's output alone would never catch anything.
-      - name: Secret leak scan
-        run: |
-          npx expo export --platform android --output-dir /tmp/export-scan
-          if grep -raoE "service_role|client_secret|SUPABASE_SERVICE_ROLE|GOOGLE_CLIENT_SECRET" /tmp/export-scan/_expo/static/js/android/*.hbc; then
-            echo "SECRET LEAK DETECTED in exported bundle — aborting"
-            exit 1
-          fi
-          echo "Secret scan passed"
-          rm -rf /tmp/export-scan
-        continue-on-error: false
-
       - name: Run integration tests
         run: npm run test:integration
 
@@ -199,7 +226,7 @@ jobs:
         run: supabase stop
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Job 5: Coverage — threshold enforcement
+  # Job 6: Coverage — threshold enforcement
   # ─────────────────────────────────────────────────────────────────────────
   coverage:
     name: Coverage Report
