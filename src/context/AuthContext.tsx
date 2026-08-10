@@ -46,6 +46,19 @@ const SESSION_RESTORE_TIMEOUT_MS = 5_000
 /** Max retries for profile load after OAuth (spec req 12.6) */
 const PROFILE_LOAD_MAX_RETRIES = 3
 
+// A returning user with a cached session resolves in a handful of
+// milliseconds — without a floor, the splash reads as a flicker instead of
+// a masthead. Hold it visible for at least this long from app start.
+const MIN_SPLASH_VISIBLE_MS = 900
+const appStartedAt = Date.now()
+
+function hideSplashScreen() {
+  const remaining = MIN_SPLASH_VISIBLE_MS - (Date.now() - appStartedAt)
+  setTimeout(() => {
+    SplashScreen.hideAsync().catch(() => {})
+  }, Math.max(0, remaining))
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider
 // ─────────────────────────────────────────────────────────────────────────────
@@ -138,19 +151,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setTimeout(() => {
               loadProfile(newSession.user.id).finally(() => {
                 setIsLoading(false)
-                SplashScreen.hideAsync().catch(() => {})
+                hideSplashScreen()
               })
             }, 0)
           } else {
             setIsLoading(false)
-            SplashScreen.hideAsync().catch(() => {})
+            hideSplashScreen()
           }
         } else if (event === 'SIGNED_OUT') {
           setSession(null)
           setProfile(null)
           setAuthError(null)
           setIsLoading(false)
-          SplashScreen.hideAsync().catch(() => {})
+          hideSplashScreen()
         }
       }
     )
@@ -159,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // cold start with no stored session), unblock the UI (spec req 5.9).
     const timeoutId = setTimeout(() => {
       setIsLoading(false)
-      SplashScreen.hideAsync().catch(() => {})
+      hideSplashScreen()
     }, SESSION_RESTORE_TIMEOUT_MS)
 
     return () => {

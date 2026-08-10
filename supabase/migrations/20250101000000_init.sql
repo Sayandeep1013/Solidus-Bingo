@@ -20,7 +20,12 @@
 --   - Trigger functions: set_updated_at, prevent_update, prevent_capacity_update
 --   - Auto-create profile on auth.users INSERT
 --   - Row Level Security (RLS) policies — DENY ALL default, then explicit SELECTs
---   - Helper functions: is_room_member(), game_room_id()
+--   - Helper functions: is_room_member(), game_room_id() — each defined right
+--     after the table it queries exists (LANGUAGE sql functions are validated
+--     against real catalog objects at CREATE time, unlike plpgsql — defining
+--     them before their table exists fails the whole migration outright, so
+--     each is placed just above the first RLS policy that needs it rather
+--     than grouped with the other trigger-function helpers up top)
 --   - Realtime publication for relevant tables
 -- =============================================================================
 
@@ -69,28 +74,6 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$;
-
--- ---------------------------------------------------------------------------
--- Helper: check if a user is an ACTIVE member of a given room
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.is_room_member(p_room_id uuid, p_user_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.room_players
-    WHERE room_id = p_room_id
-      AND player_id = p_user_id
-      AND status = 'ACTIVE'
-  );
-$$;
-
--- ---------------------------------------------------------------------------
--- Helper: get room_id for a given game_id
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.game_room_id(p_game_id uuid)
-RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT room_id FROM public.games WHERE id = p_game_id;
 $$;
 
 -- ---------------------------------------------------------------------------
@@ -211,23 +194,10 @@ CREATE TRIGGER rooms_prevent_capacity_update
   BEFORE UPDATE ON public.rooms
   FOR EACH ROW EXECUTE FUNCTION public.prevent_capacity_update();
 
--- RLS
-ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
-
--- Member read: user can see rooms they belong to
-CREATE POLICY "rooms_select_member"
-  ON public.rooms FOR SELECT
-  USING (public.is_room_member(id, auth.uid()));
-
--- Pre-join read: any authenticated user can look up a room by code (to join)
-CREATE POLICY "rooms_select_by_code"
-  ON public.rooms FOR SELECT
-  USING (auth.uid() IS NOT NULL);
-
--- No direct INSERT/UPDATE/DELETE from client — Edge Functions use service role
-
 -- =============================================================================
 -- TABLE 3: room_players
+-- (created here, before rooms' own RLS policies, because those policies call
+-- is_room_member() below, which queries this table — see header note)
 -- =============================================================================
 CREATE TABLE public.room_players (
   id          uuid        NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -254,7 +224,36 @@ CREATE UNIQUE INDEX room_players_active_unique
 CREATE INDEX room_players_room_status_idx ON public.room_players(room_id, status);
 CREATE INDEX room_players_player_id_idx   ON public.room_players(player_id);
 
--- RLS
+-- ---------------------------------------------------------------------------
+-- Helper: check if a user is an ACTIVE member of a given room
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.is_room_member(p_room_id uuid, p_user_id uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.room_players
+    WHERE room_id = p_room_id
+      AND player_id = p_user_id
+      AND status = 'ACTIVE'
+  );
+$$;
+
+-- RLS: rooms
+ALTER TABLE public.rooms ENABLE ROW LEVEL SECURITY;
+
+-- Member read: user can see rooms they belong to
+CREATE POLICY "rooms_select_member"
+  ON public.rooms FOR SELECT
+  USING (public.is_room_member(id, auth.uid()));
+
+-- Pre-join read: any authenticated user can look up a room by code (to join)
+CREATE POLICY "rooms_select_by_code"
+  ON public.rooms FOR SELECT
+  USING (auth.uid() IS NOT NULL);
+
+-- No direct INSERT/UPDATE/DELETE from client — Edge Functions use service role
+
+-- RLS: room_players
 ALTER TABLE public.room_players ENABLE ROW LEVEL SECURITY;
 
 -- A user can see all room_players rows for rooms they are ACTIVE members of
@@ -305,6 +304,14 @@ CREATE INDEX games_room_game_number_idx ON public.games(room_id, game_number);
 CREATE TRIGGER games_set_updated_at
   BEFORE UPDATE ON public.games
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Helper: get room_id for a given game_id
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.game_room_id(p_game_id uuid)
+RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER AS $$
+  SELECT room_id FROM public.games WHERE id = p_game_id;
+$$;
 
 -- RLS
 ALTER TABLE public.games ENABLE ROW LEVEL SECURITY;
