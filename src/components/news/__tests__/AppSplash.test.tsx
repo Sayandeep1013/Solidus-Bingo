@@ -10,13 +10,7 @@
 import React from 'react'
 import { Image } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { AppSplash } from '../AppSplash'
-
-// AppSplash stamps its own start time when its module is evaluated, which the
-// import above just did — so this is within a millisecond of it. Tests that
-// care about the minimum hold rewind the clock here first, since by the time
-// they run, several seconds of "app uptime" have really elapsed.
-const JS_STARTED_AT = Date.now()
+import { AppSplash, remainingHoldMs, MIN_VISIBLE_MS, FADE_OUT_MS } from '../AppSplash'
 
 const mockHideAsync = jest.fn(() => Promise.resolve(true))
 jest.mock('expo-splash-screen', () => ({
@@ -59,20 +53,17 @@ describe('AppSplash', () => {
     expect(mockHideAsync).toHaveBeenCalledTimes(1)
   })
 
-  test('holds for the minimum when auth resolves instantly, then clears itself', () => {
-    jest.setSystemTime(JS_STARTED_AT)
+  test('never unmounts synchronously, and does clear itself once the hold and fade are done', () => {
     const tree = render(false)
 
-    // A second in, the nameplate is still there rather than having flickered.
-    act(() => {
-      jest.advanceTimersByTime(1000)
-    })
+    // Whatever the clock says, auth resolving must not yank the nameplate away
+    // in the same tick — that is the flicker this component exists to prevent.
     expect(tree.toJSON()).not.toBeNull()
 
-    // …and it does go away — a splash that never unmounts would sit invisibly
-    // over the app forever.
+    // …and it must not linger either. A splash that never unmounts would sit
+    // invisibly over the app forever.
     act(() => {
-      jest.advanceTimersByTime(2000)
+      jest.advanceTimersByTime(MIN_VISIBLE_MS + FADE_OUT_MS + 100)
     })
     expect(tree.toJSON()).toBeNull()
   })
@@ -80,5 +71,23 @@ describe('AppSplash', () => {
   test('draws the splash artwork rather than an empty view', () => {
     const tree = render(true)
     expect(tree.root.findAllByType(Image).length).toBeGreaterThan(0)
+  })
+})
+
+// The hold is the whole point of the component, so it is asserted directly on
+// the arithmetic rather than by racing a real clock through a render.
+describe('remainingHoldMs', () => {
+  const START = 1_000_000
+
+  test('holds the full minimum when auth resolves the instant the app starts', () => {
+    expect(remainingHoldMs(START, START)).toBe(MIN_VISIBLE_MS)
+  })
+
+  test('holds only the remainder when boot has already used some of it', () => {
+    expect(remainingHoldMs(START + 400, START)).toBe(MIN_VISIBLE_MS - 400)
+  })
+
+  test('adds no delay at all once the minimum has already elapsed', () => {
+    expect(remainingHoldMs(START + MIN_VISIBLE_MS + 5_000, START)).toBe(0)
   })
 })

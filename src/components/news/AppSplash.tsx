@@ -32,12 +32,25 @@ import { colors } from '@/theme'
  * user with a warm session resolves in a few hundred ms; without a floor the
  * splash reads as a flicker rather than a nameplate.
  */
-const MIN_VISIBLE_MS = 1100
+export const MIN_VISIBLE_MS = 1100
 
 /** Long enough for the screen underneath to have mounted and painted. */
-const FADE_OUT_MS = 260
+export const FADE_OUT_MS = 260
 
 const jsStartedAt = Date.now()
+
+/**
+ * How much of the minimum hold is still owed. Boot has usually eaten some of
+ * it already, and once it has fully elapsed there is nothing left to wait for.
+ *
+ * Pulled out as a pure function because it is the only part of this component
+ * that reasons about wall-clock time — testing it through the rendered
+ * component means racing the clock the module captured at import, which is
+ * exactly the sort of test that passes locally and fails on a slower runner.
+ */
+export function remainingHoldMs(now: number, startedAt: number = jsStartedAt): number {
+  return Math.max(0, MIN_VISIBLE_MS - (now - startedAt))
+}
 
 // hideAsync() is safe to call twice, but the promise rejects the second time —
 // module-level latch keeps that noise out of the logs.
@@ -60,7 +73,6 @@ export function AppSplash({ visible = true }: { visible?: boolean }) {
 
   useEffect(() => {
     if (visible) return
-    const remaining = Math.max(0, MIN_VISIBLE_MS - (Date.now() - jsStartedAt))
     const timer = setTimeout(() => {
       Animated.timing(opacity, {
         toValue: 0,
@@ -72,7 +84,7 @@ export function AppSplash({ visible = true }: { visible?: boolean }) {
         // which is the right way to fail here.
         if (finished) setMounted(false)
       })
-    }, remaining)
+    }, remainingHoldMs(Date.now()))
     return () => clearTimeout(timer)
   }, [visible, opacity])
 
