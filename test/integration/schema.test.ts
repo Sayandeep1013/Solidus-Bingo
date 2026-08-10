@@ -56,7 +56,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.1 — game_boards layout must be 25 elements
   test('Req 6.1 — game_boards layout < 25 elements violates CHECK', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM01')
+    const roomId = await createTestRoom(user1Id, 'SCHMA2')
     const gameId = await createTestGame(roomId)
 
     const { error } = await admin.from('game_boards').insert({
@@ -69,7 +69,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.2 — game_calls number out of range
   test('Req 6.2 — game_calls number=0 violates CHECK', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM02')
+    const roomId = await createTestRoom(user1Id, 'SCHMB2')
     const gameId = await createTestGame(roomId)
 
     const { error } = await admin.from('game_calls').insert({
@@ -80,7 +80,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.3 — game_calls duplicate (game_id, number) pair
   test('Req 6.3 — duplicate game_calls (game_id, number) violates UNIQUE', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM03')
+    const roomId = await createTestRoom(user1Id, 'SCHMC2')
     const gameId = await createTestGame(roomId)
 
     await admin.from('game_calls').insert({ game_id: gameId, caller_id: user1Id, number: 5, sequence: 1 })
@@ -91,7 +91,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.4 — duplicate sequence in same game
   test('Req 6.4 — duplicate game_calls sequence violates UNIQUE', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM04')
+    const roomId = await createTestRoom(user1Id, 'SCHMD2')
     const gameId = await createTestGame(roomId)
 
     await admin.from('game_calls').insert({ game_id: gameId, caller_id: user1Id, number: 10, sequence: 1 })
@@ -102,7 +102,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.5 — duplicate game_completed_lines (game, player, line)
   test('Req 6.5 — duplicate game_completed_lines (game,player,line) violates UNIQUE', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM05')
+    const roomId = await createTestRoom(user1Id, 'SCHME2')
     const gameId = await createTestGame(roomId)
 
     await admin.from('game_completed_lines').insert({
@@ -117,7 +117,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.6 — invalid line_id
   test('Req 6.6 — invalid line_id violates CHECK', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM06')
+    const roomId = await createTestRoom(user1Id, 'SCHMF2')
     const gameId = await createTestGame(roomId)
 
     const { error } = await admin.from('game_completed_lines').insert({
@@ -128,7 +128,7 @@ describe('Constraint Tests', () => {
 
   // Req 6.7 — game_players score > 12
   test('Req 6.7 — game_players score > 12 violates CHECK', async () => {
-    const roomId = await createTestRoom(user1Id, 'SCHM07')
+    const roomId = await createTestRoom(user1Id, 'SCHMG2')
     const gameId = await createTestGame(roomId)
 
     const { error } = await admin.from('game_players').insert({
@@ -161,10 +161,10 @@ describe('Constraint Tests', () => {
   // Req 6.10 — closed room can reuse code
   test('Req 6.10 — closed room and active room can share code', async () => {
     const { error: e1 } = await admin.from('rooms').insert({
-      code: 'REUSEQ', host_id: user1Id, capacity: 2, status: 'CLOSED',
+      code: 'REVSEQ', host_id: user1Id, capacity: 2, status: 'CLOSED',
     })
     const { error: e2 } = await admin.from('rooms').insert({
-      code: 'REUSEQ', host_id: user1Id, capacity: 2, status: 'WAITING',
+      code: 'REVSEQ', host_id: user1Id, capacity: 2, status: 'WAITING',
     })
     expect(e1).toBeNull()
     expect(e2).toBeNull()
@@ -183,7 +183,7 @@ describe('Trigger Tests', () => {
   beforeAll(async () => {
     const u = await createTestUser(`trigger-test-${Date.now()}@test.com`)
     userId = u.id
-    roomId = await createTestRoom(userId, 'TRIGR1')
+    roomId = await createTestRoom(userId, 'TSTGR2')
     gameId = await createTestGame(roomId)
   })
 
@@ -281,7 +281,7 @@ describe('RLS Policy Tests', () => {
   // Req 6.26 — profile deletion cascades to room_players
   test('Req 6.26 — deleting a profile cascades to room_players', async () => {
     const u = await createTestUser(`cascade-test-${Date.now()}@test.com`)
-    const rId = await createTestRoom(u.id, 'CASCD1')
+    const rId = await createTestRoom(u.id, 'CASCD2')
 
     await admin.from('room_players').insert({
       room_id: rId, player_id: u.id, join_order: 1, status: 'ACTIVE',
@@ -299,7 +299,7 @@ describe('RLS Policy Tests', () => {
   // Req 6.28 — cannot delete a profile that is referenced as rooms.host_id (RESTRICT)
   test('Req 6.28 — deleting a profile that is a room host is restricted', async () => {
     const u = await createTestUser(`restrict-test-${Date.now()}@test.com`)
-    await createTestRoom(u.id, 'RESTR1')
+    await createTestRoom(u.id, 'RESTR2')
 
     // Attempting to delete a user who is a host should fail due to ON DELETE RESTRICT
     // (We test this via profile delete — the auth.users cascade triggers profile delete,
