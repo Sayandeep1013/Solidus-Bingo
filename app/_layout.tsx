@@ -30,6 +30,8 @@ import { handleDeepLink } from '@/lib/auth'
 // thing drawn, and the barrel would pull all thirteen newsprint components (and
 // expo-linear-gradient) through module eval before that first frame.
 import { AppSplash } from '@/components/news/AppSplash'
+import { UpdateRequired } from '@/components/news/UpdateRequired'
+import { checkUpdateGate, type UpdateGate } from '@/lib/appUpdate'
 
 // Hold the native splash until <AppSplash /> — which draws the same artwork —
 // has been laid out. AppSplash dismisses it itself, on layout, so the two never
@@ -86,17 +88,41 @@ function RootNavigator() {
     if (!isLoading) setBooted(true)
   }, [isLoading])
 
+  // Minimum-version gate. Checked once per launch, off the critical path: the
+  // app renders normally while this is in flight and only swaps out if the
+  // answer comes back "retired", because checkUpdateGate resolves to "allowed"
+  // on every failure. Blocking startup on it would mean a slow or unreachable
+  // backend could keep a perfectly good build off its own home screen.
+  const [gate, setGate] = useState<UpdateGate | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    checkUpdateGate().then((result) => {
+      if (!cancelled) setGate(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // AppSplash sits *over* the navigator rather than replacing it, so it also
   // covers the beat between auth resolving and index.tsx's <Redirect> landing
   // on a real screen — the stretch that used to show as blank paper.
   return (
     <View style={styles.root}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-      </Stack>
+      {gate?.required ? (
+        <UpdateRequired
+          downloadUrl={gate.downloadUrl}
+          latestVersion={gate.latestVersion}
+          message={gate.message}
+        />
+      ) : (
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="auth/callback" options={{ animation: 'none' }} />
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(app)" />
+        </Stack>
+      )}
       <AppSplash visible={isLoading && !booted} />
     </View>
   )

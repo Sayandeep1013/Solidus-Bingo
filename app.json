@@ -2,7 +2,7 @@
   "expo": {
     "name": "Solidus Bingo",
     "slug": "solidus-bingo",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "scheme": [
@@ -25,7 +25,12 @@
         "backgroundColor": "#F2ECDA"
       },
       "package": "com.solidusbingo.app",
-      "versionCode": 2
+      "versionCode": 3,
+      "splash": {
+        "image": "./assets/splash-mark.png",
+        "resizeMode": "native",
+        "backgroundColor": "#F2ECDA"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +42,17 @@
       "expo-secure-store",
       "expo-font"
     ],
+    "updates": {
+      "url": "https://u.expo.dev/2b59f0cb-3567-497f-89f2-387e2bc5217a",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "experiments": {
       "typedRoutes": true
     },

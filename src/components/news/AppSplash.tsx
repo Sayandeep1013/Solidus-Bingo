@@ -15,17 +15,40 @@
  * The masthead artwork the native splash is configured with never got a chance
  * to sit there — the ~2s the user actually spends waiting was empty paper. So
  * the JS side now draws that same artwork itself, from the first frame it can,
- * and the native splash is only dismissed once this one is on screen. There is
- * no window in which nothing is drawn, and since both are `colors.paper` on the
- * same image, the handover is invisible.
+ * and the native splash is only dismissed once this one is on screen.
+ *
+ * That still left the stretch *before* React mounts, which no JS can cover —
+ * measured at ~1s on a first launch after install, while the bundle loads. The
+ * nameplate is therefore also baked into the Android window background (see
+ * MARK_PX below), so the OS itself paints it from the very first frame. The two
+ * halves draw the same file at the same size on the same cream, so what the
+ * user sees is one screen that simply stays put until the app is ready.
  *
  * Render this — never `null` — anywhere the app is not yet ready to show a real
  * screen.
  */
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Image, StyleSheet } from 'react-native'
+import { Animated, Image, PixelRatio, StyleSheet } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
 import { colors } from '@/theme'
+
+/**
+ * Intrinsic pixel width/height of assets/splash-mark.png.
+ *
+ * Android paints that exact file, at that exact size, centred, as the window
+ * background — app.json → android.splash with resizeMode "native" builds it
+ * into `@drawable/splashscreen`, so the OS draws it from the very first frame,
+ * before any JS has run. This component then draws the same file at the same
+ * pixel size on top, which is why the handover reads as one continuous screen
+ * instead of the nameplate jumping size.
+ *
+ * Keep this in step with the CANVAS constant that generated the asset. The
+ * mark occupies 620 of these 800px, so ~90px of cream sits either side even on
+ * a 720px-wide screen — Android centre-crops rather than scales in "native"
+ * mode, and that margin is what stops narrow screens clipping the nameplate.
+ */
+const MARK_PX = 800
+const markSize = MARK_PX / PixelRatio.get()
 
 /**
  * Floor on how long the masthead stays up, measured from JS start. A returning
@@ -103,7 +126,7 @@ export function AppSplash({ visible = true }: { visible?: boolean }) {
       importantForAccessibility="no-hide-descendants"
     >
       <Image
-        source={require('../../../assets/splash.png')}
+        source={require('../../../assets/splash-mark.png')}
         style={styles.image}
         resizeMode="contain"
         fadeDuration={0}
@@ -122,5 +145,5 @@ const styles = StyleSheet.create({
     zIndex: 10,
     elevation: 10,
   },
-  image: { width: '100%', height: '100%' },
+  image: { width: markSize, height: markSize },
 })

@@ -1,0 +1,122 @@
+# .github/workflows/ota-update.yml
+#
+# Publishes a JS-only update over the air, so a fix reaches players who have
+# already installed the APK without any of them reinstalling anything.
+#
+# WHAT THIS CAN AND CANNOT SHIP
+#
+# It replaces the JavaScript bundle and the assets that bundle references.
+# Anything native is untouchable this way: a new native module, a change to
+# app.json's splash/icon/permissions/version, an SDK bump. Those still need a
+# real APK from build-apk-github.yml.
+#
+# The rule of thumb: if `npx expo prebuild` would produce different Android
+# files, an OTA cannot deliver it.
+#
+# WHY THE CONFIG LOOKS THE WAY IT DOES (app.json → updates)
+#
+#   fallbackToCacheTimeout: 0
+#     Never block launch on the update check. The default makes the app wait
+#     for the network before its first frame, which would put the blank-paper
+#     startup back after all the work spent removing it (see AppSplash.tsx).
+#     At 0, an update downloads in the background and applies on next launch.
+#
+#   runtimeVersion: { policy: "appVersion" }
+#     Ties an update to the app version it was published from. A 1.0.2 update
+#     only ever reaches 1.0.2 builds, so JS that expects a native module the
+#     installed APK does not have can never be handed to it. The cost is that
+#     every APK version needs its own update publish.
+#
+#   requestHeaders: { "expo-channel-name": "production" }
+#     EAS Build normally stamps the channel into the binary from eas.json. Our
+#     APKs are built by Gradle on GitHub's runners instead, which knows nothing
+#     about eas.json — so the channel is declared in app.json, or the installed
+#     app would never look at the production branch at all.
+#
+# Requires the EXPO_TOKEN repo secret, already configured (v1.0.1's EAS run
+# authenticated with it successfully).
+
+name: OTA Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'EAS Update branch to publish to'
+        required: false
+        default: 'production'
+      message:
+        description: 'Update message (shown in the EAS dashboard)'
+        required: false
+        default: ''
+
+jobs:
+  # Same gate as the APK workflows. An OTA reaches installed phones faster than
+  # a build does and with less warning, so it deserves more scrutiny, not less.
+  verify:
+    name: Verify (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint src --ext .ts,.tsx --max-warnings 0
+
+      - name: Unit tests + PBT
+        run: npm run test:unit
+
+      - name: Component tests
+        run: npm run test:component
+
+  publish:
+    name: Publish update
+    needs: verify
+    runs-on: ubuntu-latest
+    env:
+      # Inlined into the bundle at publish time for the same reason
+      # build-apk-github.yml inlines them: nothing here reads eas.json, so
+      # without these the OTA bundle would ship with no backend connection and
+      # would brick every phone that downloaded it. These are the public
+      # client-facing anon credentials, already committed in eas.json.
+      EXPO_PUBLIC_SUPABASE_URL: https://jvediwzzvcqttnwdgsry.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2ZWRpd3p6dmNxdHRud2Rnc3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMjQyODIsImV4cCI6MjEwMTgwMDI4Mn0.ioL2w5WMVvAV_RBYXcUOlp9W4etGZm_TUiTnf76ViDA
+      # EXPO_PUBLIC_ENABLE_TEST_LOGIN deliberately unset — the dev test-login
+      # bypass must never reach a build a real player is running.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish update
+        run: |
+          MSG="${{ github.event.inputs.message }}"
+          if [ -z "$MSG" ]; then
+            MSG="$(git log -1 --pretty=%s)"
+          fi
+          eas update \
+            --branch "${{ github.event.inputs.branch || 'production' }}" \
+            --message "$MSG" \
+            --non-interactive
