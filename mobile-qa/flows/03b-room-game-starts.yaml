@@ -1,0 +1,20 @@
+# Stage 2/2 of the private-room flow. Run AFTER 03a and AFTER the agent has
+# called `node mobile-qa/simulate-players.mjs join-room <code> testbot2`
+# with the code captured from 03a. Continues from the current foreground
+# app state (Lobby, now with 2 players) — no launchApp here.
+#
+# This is the exact transition that was broken and fixed this session: the
+# realtime channel used to be torn down on lobby->game navigation, and the
+# lobby's own "game started" check could never become true. This flow
+# exists specifically to catch a regression of that bug.
+appId: com.solidusbingo.app
+---
+- assertVisible: "TestBot2"
+- assertVisible: "FULL"
+- tapOn:
+    id: "Start game"
+- extendedWaitUntil:
+    visible:
+      text: "Your Turn|turn…"
+    timeout: 15000
+- assertVisible: "Called (0/25)"

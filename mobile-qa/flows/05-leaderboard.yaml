@@ -1,0 +1,20 @@
+# Verifies the leaderboard screen renders and both sort tabs work. Does not
+# assert specific rank numbers (state-dependent on how many ranked games
+# have actually been played by test accounts so far).
+appId: com.solidusbingo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "Test Login TestBot1"
+- extendedWaitUntil:
+    visible: "Solidus Bingo"
+    timeout: 15000
+- tapOn:
+    id: "View leaderboard"
+- assertVisible: "Leaderboard"
+- assertVisible:
+    id: "Sort by most wins"
+- tapOn:
+    id: "Sort by best win rate"
+- assertVisible: "Win rate ranking requires"

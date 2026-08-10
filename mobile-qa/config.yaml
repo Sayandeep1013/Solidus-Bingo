@@ -1,0 +1,32 @@
+# mobile-qa/config.yaml — see the autonomous-mobile-qa Claude Code skill
+# (~/.claude/skills/autonomous-mobile-qa/SKILL.md) for the general workflow
+# this folder plugs into.
+
+app_id: com.solidusbingo.app
+platform: android
+env_file: .env.local
+
+backend: supabase
+supabase_project_ref: jvediwzzvcqttnwdgsry
+
+test_accounts_note: >
+  src/lib/testAccounts.ts — TestBot1..TestBot4
+  (testbot1..4@solidusbingo.test), password in
+  EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD (.env.local). Seeded via the
+  dev-seed-test-accounts Edge Function — safe to re-run, idempotent.
+
+requires: >
+  EXPO_PUBLIC_ENABLE_TEST_LOGIN=true (already set in .env.local and in
+  eas.json's development/preview profiles — never in production) so the
+  "Dev Test Login" buttons render on the login screen.
+
+scope_note: >
+  This first flow set verifies NAVIGATION and screen-rendering correctness
+  (does the app actually get you from screen to screen with the right state
+  loaded) rather than full gameplay-to-completion (playing an entire bingo
+  game to a win). That's a deliberate choice: the bugs found and fixed this
+  session were all navigation/state-transition bugs (stuck on a screen after
+  an action succeeded server-side), not game-logic bugs (those are already
+  covered by src/lib/__tests__ unit + property-based tests). Full
+  play-to-completion flows are a reasonable future addition once this base
+  layer is solid.

@@ -1,0 +1,25 @@
+# Verifies Home -> Bot Setup -> Bot Game wiring: board renders and a turn
+# indicator appears. Does NOT play to completion (see config.yaml scope_note).
+appId: com.solidusbingo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "Test Login TestBot1"
+- extendedWaitUntil:
+    visible: "Solidus Bingo"
+    timeout: 15000
+- tapOn:
+    id: "Play against bots"
+- tapOn:
+    id: "2 players"
+- tapOn:
+    id: "Start bot game"
+- extendedWaitUntil:
+    visible:
+      text: "Your Turn|turn…"
+    timeout: 10000
+- assertVisible: "Called (0/25)"
+- tapOn:
+    id: "Leave practice game"
+- assertVisible: "Hey, TestBot1"

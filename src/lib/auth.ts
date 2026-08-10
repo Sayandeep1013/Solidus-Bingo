@@ -176,6 +176,16 @@ export async function handleDeepLink(url: string): Promise<void> {
  * AuthContext observes onAuthStateChange and clears in-memory state when the
  * SIGNED_OUT event fires, so no store clearing is needed here.
  */
+/**
+ * QA-only: signs in with a fixed test account's email/password, bypassing
+ * Google OAuth entirely. Only reachable from the UI when TEST_LOGIN_ENABLED
+ * is true (see src/lib/testAccounts.ts) — never present in production.
+ */
+export async function signInWithTestAccount(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw error
+}
+
 export async function signOut(): Promise<void> {
   try {
     const { error } = await supabase.auth.signOut()

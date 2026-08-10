@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { useBotGameStore, HUMAN_PLAYER_ID, selectCutIndices } from '@/store/botGameStore'
 
@@ -33,6 +34,7 @@ export default function BotGameScreen() {
 
   const [isBotThinking, setIsBotThinking] = useState(false)
   const botTurnHandledRef = useRef<string | null>(null)
+  const insets = useSafeAreaInsets()
 
   const myBoard = boards[HUMAN_PLAYER_ID]
   const isMyTurn = status === 'ACTIVE' && activePlayerId === HUMAN_PLAYER_ID
@@ -100,7 +102,12 @@ export default function BotGameScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.leaveTop} onPress={handleLeave} accessibilityRole="button" accessibilityLabel="Leave practice game">
+      <TouchableOpacity
+        style={[styles.leaveTop, { paddingTop: insets.top + 12 }]}
+        onPress={handleLeave}
+        accessibilityRole="button"
+        accessibilityLabel="Leave practice game"
+      >
         <Text style={styles.leaveTopText}>← Leave</Text>
       </TouchableOpacity>
 
@@ -170,7 +177,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1a1a2e' },
   loading: { flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: '#aaaaaa', fontSize: 14 },
-  leaveTop: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  leaveTop: { paddingHorizontal: 16, paddingBottom: 4 },
   leaveTopText: { color: '#6c63ff', fontSize: 14 },
   turnBanner: {
     backgroundColor: '#2a2a40', paddingVertical: 12,

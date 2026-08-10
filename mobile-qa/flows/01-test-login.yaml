@@ -1,0 +1,14 @@
+# Smoke test: dev test-login reaches Home with the right username.
+# Requires EXPO_PUBLIC_ENABLE_TEST_LOGIN=true in the running build.
+appId: com.solidusbingo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "Test Login TestBot1"
+- extendedWaitUntil:
+    visible: "Solidus Bingo"
+    timeout: 15000
+- assertVisible: "Hey, TestBot1"
+- assertVisible:
+    id: "Play ranked"

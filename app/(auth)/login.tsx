@@ -12,6 +12,7 @@
  *   - Button disabled while loading to prevent duplicate taps
  *   - No error shown on cancel
  */
+import { useState } from 'react'
 import {
   ActivityIndicator,
   StyleSheet,
@@ -21,6 +22,8 @@ import {
 } from 'react-native'
 import { Redirect } from 'expo-router'
 import { useAuth } from '@/context/AuthContext'
+import { signInWithTestAccount } from '@/lib/auth'
+import { TEST_LOGIN_ENABLED, TEST_ACCOUNTS, TEST_ACCOUNT_PASSWORD } from '@/lib/testAccounts'
 
 const ERROR_MESSAGES: Record<string, string> = {
   GOOGLE_AUTH_FAILED:
@@ -35,6 +38,8 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export default function LoginScreen() {
   const { session, profile, isLoading, authError, signIn } = useAuth()
+  const [testLoginError, setTestLoginError] = useState<string | null>(null)
+  const [testLoginBusy, setTestLoginBusy] = useState<string | null>(null)
 
   // Should not normally render if already signed in — guard anyway
   if (session && profile?.username) {
@@ -50,6 +55,18 @@ export default function LoginScreen() {
     authError && authError !== 'GOOGLE_AUTH_CANCELLED'
       ? ERROR_MESSAGES[authError] ?? 'An unexpected error occurred.'
       : null
+
+  const handleTestLogin = async (email: string) => {
+    setTestLoginError(null)
+    setTestLoginBusy(email)
+    try {
+      await signInWithTestAccount(email, TEST_ACCOUNT_PASSWORD)
+    } catch {
+      setTestLoginError('Test login failed')
+    } finally {
+      setTestLoginBusy(null)
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -79,6 +96,31 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Continue with Google</Text>
           )}
         </TouchableOpacity>
+
+        {TEST_LOGIN_ENABLED && (
+          <View style={styles.testLoginBox}>
+            <Text style={styles.testLoginLabel}>Dev Test Login (QA only)</Text>
+            {testLoginError ? <Text style={styles.errorText}>{testLoginError}</Text> : null}
+            <View style={styles.testLoginRow}>
+              {TEST_ACCOUNTS.map((acct) => (
+                <TouchableOpacity
+                  key={acct.email}
+                  style={styles.testLoginButton}
+                  onPress={() => handleTestLogin(acct.email)}
+                  disabled={testLoginBusy !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Test Login ${acct.username}`}
+                >
+                  {testLoginBusy === acct.email ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.testLoginButtonText}>{acct.username}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
     </View>
   )
@@ -134,6 +176,40 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#1a1a2e',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  testLoginBox: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#3a3a55',
+    gap: 8,
+  },
+  testLoginLabel: {
+    color: '#666666',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  testLoginRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  testLoginButton: {
+    backgroundColor: '#2a2a40',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#3a3a55',
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  testLoginButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '600',
   },
 })

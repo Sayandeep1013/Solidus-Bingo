@@ -8,6 +8,10 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_TEST_LOGIN": "true",
+        "EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD": "Testing123!Bingo"
+      },
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
@@ -15,6 +19,10 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_ENABLE_TEST_LOGIN": "true",
+        "EXPO_PUBLIC_TEST_ACCOUNT_PASSWORD": "Testing123!Bingo"
+      },
       "android": {
         "buildType": "apk"
       }

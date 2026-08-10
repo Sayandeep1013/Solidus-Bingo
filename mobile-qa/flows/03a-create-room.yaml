@@ -1,0 +1,27 @@
+# Stage 1/2 of the private-room flow. Creates a 2-player room and captures
+# the room code so the agent can join a simulated second player via
+# simulate-players.mjs before running 03b. Leaves the app in the Lobby
+# screen — do not relaunch before running 03b.
+appId: com.solidusbingo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "Test Login TestBot1"
+- extendedWaitUntil:
+    visible: "Solidus Bingo"
+    timeout: 15000
+- tapOn:
+    id: "Create a room"
+- tapOn:
+    id: "2 players"
+- tapOn:
+    id: "Create room"
+- extendedWaitUntil:
+    visible: "WAITING"
+    timeout: 10000
+# Room code is rendered as "Room: ABC123" in a single text node — captures
+# the whole string; the agent strips the "Room: " prefix before passing the
+# 6-character code to simulate-players.mjs.
+- copyTextFrom:
+    text: "Room: .*"

@@ -1,0 +1,12 @@
+# Stage 2/2 of the ranked matchmaking flow. Run AFTER 04a and AFTER the
+# agent has called `node mobile-qa/simulate-players.mjs ranked-queue
+# testbot2 2` — that completes the match server-side and the device should
+# navigate straight to the Game screen with no lobby step (by design — see
+# .kiro/specs/bingo-ranked-matchmaking/requirements.md Req 3.3).
+appId: com.solidusbingo.app
+---
+- extendedWaitUntil:
+    visible:
+      text: "Your Turn|turn…"
+    timeout: 20000
+- assertVisible: "Called (0/25)"

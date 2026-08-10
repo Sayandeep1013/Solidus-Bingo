@@ -1,0 +1,20 @@
+# Stage 1/2 of the ranked matchmaking flow. Queues TestBot1 for a 2-player
+# ranked match and leaves the app on the Searching screen. Run
+# `node mobile-qa/simulate-players.mjs ranked-queue testbot2 2` next, then
+# run 04b.
+appId: com.solidusbingo.app
+---
+- launchApp:
+    clearState: true
+- tapOn:
+    id: "Test Login TestBot1"
+- extendedWaitUntil:
+    visible: "Solidus Bingo"
+    timeout: 15000
+- tapOn:
+    id: "Play ranked"
+- tapOn:
+    id: "2 players"
+- tapOn:
+    id: "Find match"
+- assertVisible: "Searching for players"
