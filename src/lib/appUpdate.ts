@@ -24,6 +24,12 @@ import { supabase } from './supabaseClient'
 export const APP_VERSION: string | null = Constants.expoConfig?.version ?? null
 
 export interface UpdateGate {
+  /**
+   * A newer build exists and this one still works. Shown as a dismissible
+   * notice, never a wall — the whole point of the soft prompt is that the
+   * player decides when to act on it.
+   */
+  updateAvailable: boolean
   /** True only when we positively know this build is below the floor. */
   required: boolean
   latestVersion: string | null
@@ -34,6 +40,7 @@ export interface UpdateGate {
 const DEFAULT_DOWNLOAD_URL = 'https://github.com/Sayandeep1013/Solidus-Bingo/releases/latest'
 
 const ALLOWED: UpdateGate = {
+  updateAvailable: false,
   required: false,
   latestVersion: null,
   downloadUrl: DEFAULT_DOWNLOAD_URL,
@@ -69,10 +76,23 @@ export function isBelowMinimum(version: string | null, minimum: string | null): 
 }
 
 /**
- * Reads the floor and decides whether this build is retired. Never throws and
- * never rejects — every failure path resolves to "allowed".
+ * Cached for the life of the process. The root layout asks on boot and Home
+ * asks again to render its notice; without this that is two round trips for one
+ * answer that cannot change mid-session.
  */
-export async function checkUpdateGate(): Promise<UpdateGate> {
+let inFlight: Promise<UpdateGate> | null = null
+
+/**
+ * Reads the floor and decides whether this build is retired, and separately
+ * whether a newer one exists. Never throws and never rejects — every failure
+ * path resolves to "allowed", with no update advertised.
+ */
+export function checkUpdateGate(): Promise<UpdateGate> {
+  if (!inFlight) inFlight = fetchUpdateGate()
+  return inFlight
+}
+
+async function fetchUpdateGate(): Promise<UpdateGate> {
   if (!APP_VERSION) return ALLOWED
 
   try {
@@ -83,8 +103,14 @@ export async function checkUpdateGate(): Promise<UpdateGate> {
 
     if (error || !data) return ALLOWED
 
+    const required = isBelowMinimum(APP_VERSION, data.min_supported_version)
+
     return {
-      required: isBelowMinimum(APP_VERSION, data.min_supported_version),
+      // Only worth mentioning while the build still runs — once it is below the
+      // floor the blocking screen has already said everything, and offering a
+      // dismissible nudge alongside it would just be confusing.
+      updateAvailable: !required && isBelowMinimum(APP_VERSION, data.latest_version),
+      required,
       latestVersion: data.latest_version ?? null,
       downloadUrl: data.download_url || DEFAULT_DOWNLOAD_URL,
       message: data.message ?? null,

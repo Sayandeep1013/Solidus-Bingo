@@ -12,7 +12,7 @@
  * ALREADY_IN_GAME error trying to do something else.
  */
 import { useCallback, useEffect, useState } from 'react'
-import { ScrollView, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
+import { Linking, ScrollView, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useRoomStore } from '@/store/roomStore'
 import { invokeEdgeFunction } from '@/lib/invokeEdgeFunction'
 import { applyGameSnapshot } from '@/lib/gameSnapshot'
+import { checkUpdateGate, type UpdateGate } from '@/lib/appUpdate'
 import { colors, fonts, spacing, radius, KICKER_LETTER_SPACING } from '@/theme'
 import { Masthead, PaperBackground, NewsButton, NewsCard, SectionLabel, ConfirmDialog } from '@/components/news'
 
@@ -46,6 +47,11 @@ export default function HomeScreen() {
   // the paper rather than the OS's own blue-buttoned Alert.
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
+  // A newer build exists. Dismissible, and only for this session — it should
+  // come back next launch, since the point is that you eventually install it,
+  // but it must never stand between you and a game you wanted to play.
+  const [update, setUpdate] = useState<UpdateGate | null>(null)
+  const [updateDismissed, setUpdateDismissed] = useState(false)
 
   const loadStatus = useCallback(async () => {
     const { data } = await invokeEdgeFunction('get-my-status', { body: {} })
@@ -58,6 +64,18 @@ export default function HomeScreen() {
   useEffect(() => {
     loadStatus()
   }, [loadStatus])
+
+  useEffect(() => {
+    // Cached in appUpdate, so this shares the root layout's single request
+    // rather than asking the backend the same question twice per launch.
+    let cancelled = false
+    checkUpdateGate().then((result) => {
+      if (!cancelled) setUpdate(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleResume = async () => {
     if (!activeGame) return
@@ -139,6 +157,31 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
+        ) : null}
+
+        {update?.updateAvailable && !updateDismissed ? (
+          <NewsCard style={styles.updateCard}>
+            <Text style={styles.updateKicker}>New Edition</Text>
+            <Text style={styles.updateText}>
+              Version {update.latestVersion} is out
+              {update.message ? ` — ${update.message}` : '. Install it over this one; nothing is lost.'}
+            </Text>
+            <View style={styles.updateActions}>
+              <NewsButton
+                label="Get the Update"
+                onPress={() => Linking.openURL(update.downloadUrl)}
+                variant="accent"
+                accessibilityLabel={`Download version ${update.latestVersion}`}
+              />
+              <TouchableOpacity
+                onPress={() => setUpdateDismissed(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss the update notice"
+              >
+                <Text style={styles.updateDismiss}>Not now</Text>
+              </TouchableOpacity>
+            </View>
+          </NewsCard>
         ) : null}
 
         {unseenResult ? (
@@ -286,6 +329,17 @@ const styles = StyleSheet.create({
   noticeTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   noticeSubtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.inkFaded },
   noticeActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  updateCard: { gap: spacing.xs, borderColor: colors.accent },
+  updateKicker: {
+    fontFamily: fonts.bodyBold, fontSize: 11,
+    letterSpacing: KICKER_LETTER_SPACING, color: colors.accent,
+  },
+  updateText: { fontFamily: fonts.body, fontSize: 14, color: colors.ink, lineHeight: 20 },
+  updateActions: { gap: spacing.xs, marginTop: spacing.xs },
+  updateDismiss: {
+    fontFamily: fonts.bodyItalic, fontSize: 13, color: colors.inkFaded,
+    textAlign: 'center', paddingVertical: spacing.xs,
+  },
   awayCard: { gap: spacing.xs },
   awayKicker: {
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING, color: colors.inkFaded,
