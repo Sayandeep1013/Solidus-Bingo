@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   turnText: {
     fontFamily: fonts.display, fontSize: 18, color: colors.inkFaded,
   },
-  turnTextActive: { fontFamily: fonts.displayHeavy, color: colors.accent },
+  turnTextActive: { fontFamily: fonts.display, color: colors.accent },
   turnRule: { marginHorizontal: spacing.lg },
   boardContainer: { padding: spacing.lg, paddingTop: spacing.xl, alignItems: 'center' },
   boardCard: {

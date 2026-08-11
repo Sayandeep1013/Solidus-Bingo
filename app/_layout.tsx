@@ -8,16 +8,14 @@
  */
 import 'react-native-url-polyfill/auto'
 import { useEffect, useState } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { Platform, View, StyleSheet } from 'react-native'
+import * as NavigationBar from 'expo-navigation-bar'
 import { Stack } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
-import { UnifrakturMaguntia_400Regular } from '@expo-google-fonts/unifrakturmaguntia'
-import {
-  GrenzeGotisch_700Bold,
-  GrenzeGotisch_800ExtraBold,
-} from '@expo-google-fonts/grenze-gotisch'
+import { UnifrakturCook_700Bold } from '@expo-google-fonts/unifrakturcook'
+import { GrenzeGotisch_800ExtraBold } from '@expo-google-fonts/grenze-gotisch'
 import {
   PlayfairDisplay_700Bold,
   PlayfairDisplay_700Bold_Italic,
@@ -45,8 +43,7 @@ SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    UnifrakturMaguntia_400Regular,
-    GrenzeGotisch_700Bold,
+    UnifrakturCook_700Bold,
     GrenzeGotisch_800ExtraBold,
     PlayfairDisplay_900Black,
     PlayfairDisplay_700Bold,
@@ -55,6 +52,22 @@ export default function RootLayout() {
     PTSerif_400Regular_Italic,
     PTSerif_700Bold,
   })
+
+  // Android draws an opaque black slab behind the gesture bar by default — 63px
+  // of it on this device — which cut the paper off short of the bottom of the
+  // display and read as a letterbox rather than a page. Positioning the bar
+  // absolutely lets the window extend underneath it, and a fully transparent
+  // background lets the newsprint show through, leaving just the pill floating
+  // over the page. Dark buttons because the page is cream.
+  //
+  // PaperBackground pads its children by insets.bottom so nothing ends up
+  // underneath the pill — see the note there.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return
+    NavigationBar.setPositionAsync('absolute').catch(() => {})
+    NavigationBar.setBackgroundColorAsync('#00000000').catch(() => {})
+    NavigationBar.setButtonStyleAsync('dark').catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Foreground deep links

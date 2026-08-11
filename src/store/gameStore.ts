@@ -82,8 +82,21 @@ interface GameState {
    */
   forfeitVoteBallots: Record<string, 'YES' | 'NO'>
 
-  /** Set when game is FINISHED. null until then. */
+  /** Set when a single player won. Stays null on a DRAW — see coWinnerIds. */
   winnerId: string | null
+
+  /**
+   * Everyone who reached 5 on the same deciding call. Non-empty only when
+   * outcome is DRAW, in which case winnerId is null because nobody won alone.
+   */
+  coWinnerIds: string[]
+
+  /**
+   * How the game ended. DRAW (several players reached 5 together) is a
+   * different thing from ABANDONED (all 25 called, nobody got there), and the
+   * result screen says different things about them.
+   */
+  outcome: 'WINNER' | 'DRAW' | 'CANCELLED' | 'ABANDONED' | null
 
   /** The winning call number. null until FINISHED. */
   winningCall: number | null
@@ -146,6 +159,12 @@ interface GameState {
   updateActivePlayer: (activePlayerId: string | null, turnStartedAt?: string | null) => void
   updateGameStatus: (status: GameStatus, winnerId?: string | null, winningCall?: number | null) => void
 
+  /** Applied from the game_results row once a finished game's snapshot lands. */
+  setGameResult: (result: {
+    outcome: 'WINNER' | 'DRAW' | 'CANCELLED' | 'ABANDONED'
+    coWinnerIds: string[]
+  }) => void
+
   setGameFinished: (args: {
     winnerId: string | null
     winningCall: number | null
@@ -161,7 +180,7 @@ const INITIAL: Pick<
   GameState,
   | 'gameId' | 'gameNumber' | 'gameStatus' | 'myBoard' | 'calledNumbers'
   | 'scoreMap' | 'completedLines' | 'activePlayerId'
-  | 'winnerId' | 'winningCall' | 'lastCallSequence'
+  | 'winnerId' | 'coWinnerIds' | 'outcome' | 'winningCall' | 'lastCallSequence'
   | 'turnStartedAt' | 'timeRemainingMs' | 'outPlayerIds' | 'botControlledPlayerIds'
   | 'pendingForfeitVote' | 'forfeitVoteBallots'
 > = {
@@ -174,6 +193,8 @@ const INITIAL: Pick<
   completedLines: [],
   activePlayerId: null,
   winnerId: null,
+  coWinnerIds: [],
+  outcome: null,
   winningCall: null,
   lastCallSequence: 0,
   turnStartedAt: null,
@@ -282,6 +303,8 @@ export const useGameStore = create<GameState>()((set, get) => ({
 
   updateGameStatus: (status, winnerId = null, winningCall = null) =>
     set({ gameStatus: status, winnerId, winningCall }),
+
+  setGameResult: ({ outcome, coWinnerIds }) => set({ outcome, coWinnerIds }),
 
   setGameFinished: ({ winnerId, winningCall, finalScores }) =>
     set({

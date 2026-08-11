@@ -10,15 +10,17 @@
  * anti-manipulation guarantee depends on).
  *
  * Mirrors the exact win rule used server-side by supabase/functions/call-number
- * (via _shared/resolveCall.ts): the winner is the player whose own board
- * reached 5 lines, whoever called the number that got them there; a call that
- * pushes two players to 5 at once goes to the caller.
+ * (via _shared/resolveCall.ts), through the shared resolveOutcome helper: the
+ * winner is the player whose own board reached 5 lines, whoever called the
+ * number that got them there, and a call that takes several players to 5 at
+ * once is a shared victory rather than a win for any one of them.
  */
 import { create } from 'zustand'
 import {
   generateBoards,
   evaluateNewLines,
   advanceTurn,
+  resolveOutcome,
   type LineId,
   type GamePlayer,
 } from '../lib/gameEngine'
@@ -42,7 +44,16 @@ interface BotGameState {
   scoreMap: Record<string, number>
   completedLines: CompletedLine[]
   activePlayerId: string | null
+  /** Set only for a single-winner finish; null on a draw. */
   winnerId: string | null
+  /** Everyone who reached 5 on the deciding call. Empty unless outcome is DRAW. */
+  coWinnerIds: string[]
+  /**
+   * DRAW = several players hit 5 on the same call and share the victory.
+   * ABANDONED = all 25 called and nobody got there — nobody achieved anything.
+   * The two are deliberately distinct; the result screen says different things.
+   */
+  outcome: 'WINNER' | 'DRAW' | 'ABANDONED' | null
   winningCall: number | null
   status: GameStatus | null
 
@@ -58,7 +69,7 @@ interface BotGameState {
 const INITIAL: Pick<
   BotGameState,
   | 'players' | 'boards' | 'calledNumbers' | 'scoreMap' | 'completedLines'
-  | 'activePlayerId' | 'winnerId' | 'winningCall' | 'status'
+  | 'activePlayerId' | 'winnerId' | 'coWinnerIds' | 'outcome' | 'winningCall' | 'status'
 > = {
   players: [],
   boards: {},
@@ -67,6 +78,8 @@ const INITIAL: Pick<
   completedLines: [],
   activePlayerId: null,
   winnerId: null,
+  coWinnerIds: [],
+  outcome: null,
   winningCall: null,
   status: null,
 }
@@ -103,6 +116,8 @@ export const useBotGameStore = create<BotGameState>()((set, get) => ({
       completedLines: [],
       activePlayerId: firstPlayer.playerId,
       winnerId: null,
+      coWinnerIds: [],
+      outcome: null,
       winningCall: null,
       status: 'ACTIVE',
     })
@@ -139,34 +154,54 @@ export const useBotGameStore = create<BotGameState>()((set, get) => ({
       scoreMap[line.playerId] = (scoreMap[line.playerId] ?? 0) + 1
     }
 
-    // Winner = whoever's own board reached 5 lines, with the caller winning a
-    // tie — mirrors resolveCall's win check exactly (spec bingo-game-mechanics
-    // §4.3–4.4). Calls are cut on every board at once, so the bot calling the
-    // number that completes YOUR fifth line must not hand the bot the win.
-    const winners = [...state.players]
-      .sort((a, b) => a.turnOrder - b.turnOrder)
-      .filter((p) => (scoreMap[p.playerId] ?? 0) >= 5)
-      .map((p) => p.playerId)
+    // One shared rule for how the game stands, tested exhaustively against the
+    // E1-E12 table in bingo-game-mechanics §5 and mirrored by resolveCall.ts on
+    // the server. Notably the caller is not an input: a call that takes two
+    // players to 5 at once is a draw, not a win for whoever happened to make it.
+    const outcome = resolveOutcome({
+      players: state.players,
+      scores: scoreMap,
+      callSequence: calledSet.size,
+    })
 
-    if (winners.length > 0) {
+    const applied = {
+      calledNumbers: [...state.calledNumbers, num],
+      completedLines: [...state.completedLines, ...newlyCompleted],
+      scoreMap,
+    }
+
+    if (outcome.kind === 'WINNER') {
       set({
-        calledNumbers: [...state.calledNumbers, num],
-        completedLines: [...state.completedLines, ...newlyCompleted],
-        scoreMap,
+        ...applied,
         activePlayerId: null,
-        winnerId: winners.includes(callerId) ? callerId : winners[0],
+        winnerId: outcome.winnerId,
+        coWinnerIds: [],
+        outcome: 'WINNER',
         winningCall: num,
         status: 'FINISHED',
       })
       return
     }
 
-    if (calledSet.size === 25) {
+    if (outcome.kind === 'DRAW') {
       set({
-        calledNumbers: [...state.calledNumbers, num],
-        completedLines: [...state.completedLines, ...newlyCompleted],
-        scoreMap,
+        ...applied,
         activePlayerId: null,
+        // No winner_id on a draw — nobody won it alone.
+        winnerId: null,
+        coWinnerIds: outcome.coWinnerIds,
+        outcome: 'DRAW',
+        winningCall: num,
+        status: 'FINISHED',
+      })
+      return
+    }
+
+    if (outcome.kind === 'EXHAUSTED') {
+      set({
+        ...applied,
+        activePlayerId: null,
+        outcome: 'ABANDONED',
         status: 'ABANDONED',
       })
       return
@@ -178,12 +213,7 @@ export const useBotGameStore = create<BotGameState>()((set, get) => ({
     }))
     const nextPlayerId = advanceTurn(turnOrderPlayers, callerId)
 
-    set({
-      calledNumbers: [...state.calledNumbers, num],
-      completedLines: [...state.completedLines, ...newlyCompleted],
-      scoreMap,
-      activePlayerId: nextPlayerId,
-    })
+    set({ ...applied, activePlayerId: nextPlayerId })
   },
 
   reset: () => set(INITIAL),

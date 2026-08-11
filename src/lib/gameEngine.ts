@@ -172,13 +172,84 @@ export function checkWinCondition(scores: Map<string, number>): boolean {
 
 /**
  * Returns the player ID of the first player with score >= 5, or null if no winner.
- * Used to identify the winner when `checkWinCondition` is true.
+ *
+ * NOTE: "first" is meaningless when several players cross the threshold on the
+ * same call, which is common — see resolveOutcome below, which is what actually
+ * decides a game. This is kept only for callers that just need *a* player at 5.
  */
 export function findWinner(scores: Map<string, number>): string | null {
   for (const [playerId, score] of scores.entries()) {
     if (score >= 5) return playerId
   }
   return null
+}
+
+/** Completed lines required to win. */
+export const WIN_THRESHOLD = 5
+
+/** Every number is called exactly once, so this is also the maximum sequence. */
+export const TOTAL_NUMBERS = 25
+
+export type GameOutcome =
+  /** Nobody eligible is at the threshold and numbers remain. */
+  | { kind: 'CONTINUE' }
+  /** Exactly one eligible player reached the threshold. */
+  | { kind: 'WINNER'; winnerId: string }
+  /** Several eligible players reached it on the same call — a shared victory. */
+  | { kind: 'DRAW'; coWinnerIds: string[] }
+  /** All 25 called and nobody reached it. Distinct from DRAW: no winners at all. */
+  | { kind: 'EXHAUSTED' }
+
+export interface OutcomePlayer {
+  playerId: string
+  turnOrder: number
+  /** Forfeited, timed out, or disconnect-resolved. */
+  isOut?: boolean
+}
+
+/**
+ * Decides how a game stands after a call has been scored.
+ *
+ * Spec: bingo-game-mechanics §5, including the E1–E12 edge-case table.
+ *
+ * The whole point is that it collects EVERY eligible player at the threshold
+ * before deciding, rather than stopping at the first. One called number is cut
+ * on every board at once, so it routinely completes the fifth line for more
+ * than one player simultaneously — and there is no ordering between those
+ * completions to break the tie with. Caller-wins, lowest-turn-order and
+ * first-found are all invented precedence, and each one produces a screen where
+ * two players watched themselves reach 5 and only one was told they won.
+ *
+ * Pure and total: same inputs, same result, no clock and no I/O. resolveCall.ts
+ * on the server mirrors this logic exactly (Deno can't import from src/), so
+ * these tests are the specification both sides are held to.
+ */
+export function resolveOutcome({
+  players,
+  scores,
+  callSequence,
+}: {
+  players: OutcomePlayer[]
+  scores: Record<string, number>
+  callSequence: number
+}): GameOutcome {
+  const reached = [...players]
+    // Ordered by turn_order so a replay of the same call records a
+    // byte-identical co-winner set (spec §5.5).
+    .sort((a, b) => a.turnOrder - b.turnOrder)
+    // is_out players keep accruing lines — their boards are still scored — but
+    // can no longer win or draw (§5.1, E7/E8).
+    .filter((p) => !p.isOut && (scores[p.playerId] ?? 0) >= WIN_THRESHOLD)
+    .map((p) => p.playerId)
+
+  if (reached.length === 1) return { kind: 'WINNER', winnerId: reached[0] }
+  if (reached.length > 1) return { kind: 'DRAW', coWinnerIds: reached }
+
+  // Checked only after the threshold: a 25th call that puts two players at 5 is
+  // a DRAW, not an exhaustion (E11).
+  if (callSequence >= TOTAL_NUMBERS) return { kind: 'EXHAUSTED' }
+
+  return { kind: 'CONTINUE' }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

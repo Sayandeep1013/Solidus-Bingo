@@ -20,8 +20,16 @@
  * Previously duplicated verbatim in call-number and claim-forfeit-win —
  * factored out here once a third caller (resolvePlayerOut) needed it too.
  */
+/**
+ * `winners` accepts either a single winner or the co-winner set of a DRAW —
+ * every one of them is credited with a win, and everyone else takes a loss
+ * (spec bingo-game-mechanics §5.6). games_played increments once per player
+ * either way: a shared victory is still one game each, not one per winner.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function finalizeRankedStats(admin: any, playerIds: string[], winnerId: string | null, capacity: number) {
+export async function finalizeRankedStats(admin: any, playerIds: string[], winners: string | string[] | null, capacity: number) {
+  const winnerSet = new Set(winners == null ? [] : (Array.isArray(winners) ? winners : [winners]))
+
   for (const playerId of playerIds) {
     const { data: existing } = await admin
       .from('player_stats')
@@ -31,7 +39,7 @@ export async function finalizeRankedStats(admin: any, playerIds: string[], winne
       .maybeSingle()
 
     const gamesPlayed = (existing?.games_played ?? 0) + 1
-    const gamesWon = (existing?.games_won ?? 0) + (playerId === winnerId ? 1 : 0)
+    const gamesWon = (existing?.games_won ?? 0) + (winnerSet.has(playerId) ? 1 : 0)
 
     const { error } = await admin
       .from('player_stats')

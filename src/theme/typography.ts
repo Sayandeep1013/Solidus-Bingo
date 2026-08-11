@@ -3,9 +3,10 @@
  *
  * Four families, matching how a real newspaper page is set:
  *
- *   - UnifrakturMaguntia — the nameplate. Blackletter, the way papers have set
- *     their own name since they were the only thing anyone set in it. Used for
- *     "Solidus Bingo" itself and nowhere else.
+ *   - UnifrakturCook Bold — the nameplate. Blackletter, the way papers have set
+ *     their own name since they were the only thing anyone set in it; the bold
+ *     cut rather than Maguntia's regular, so the wordmark carries the page.
+ *     Used for "Solidus Bingo" itself and nowhere else.
  *   - Grenze Gotisch — the headline face. Blackletter-flavoured but drawn for
  *     legibility at a glance, which is what makes it usable for headlines the
  *     nameplate face would render unreadable.
@@ -30,11 +31,10 @@
  */
 export const fonts = {
   /** The paper's own name. Title Case only — see note above. */
-  nameplate: 'UnifrakturMaguntia_400Regular',
+  nameplate: 'UnifrakturCook_700Bold',
 
   /** Screen headlines: "Play Ranked", "Bot Ada Wins", "Your Turn". */
-  display: 'GrenzeGotisch_700Bold',
-  displayHeavy: 'GrenzeGotisch_800ExtraBold',
+  display: 'GrenzeGotisch_800ExtraBold',
 
   /** Numerals, codes and values — legibility over character. */
   headlineBlack: 'PlayfairDisplay_900Black',

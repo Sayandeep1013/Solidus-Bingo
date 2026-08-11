@@ -14,6 +14,8 @@ import { PaperBackground, NewsButton, NewsCard, Divider } from '@/components/new
 
 export default function BotResultScreen() {
   const winnerId = useBotGameStore((s) => s.winnerId)
+  const coWinnerIds = useBotGameStore((s) => s.coWinnerIds)
+  const outcome = useBotGameStore((s) => s.outcome)
   const status = useBotGameStore((s) => s.status)
   const winningCall = useBotGameStore((s) => s.winningCall)
   const scoreMap = useBotGameStore((s) => s.scoreMap)
@@ -22,8 +24,18 @@ export default function BotResultScreen() {
   const reset = useBotGameStore((s) => s.reset)
 
   const isWinner = winnerId === HUMAN_PLAYER_ID
-  const isDraw = status === 'ABANDONED'
+  // Several players reached 5 on the same call and share it.
+  const isSharedWin = outcome === 'DRAW'
+  const sharedWithYou = isSharedWin && coWinnerIds.includes(HUMAN_PLAYER_ID)
+  // Nobody got there at all — every number called. A different thing entirely.
+  const isExhausted = outcome === 'ABANDONED' || status === 'ABANDONED'
   const winnerName = players.find((p) => p.playerId === winnerId)?.displayName
+  const coWinnerNames = coWinnerIds
+    .map((id) => (id === HUMAN_PLAYER_ID ? 'You' : players.find((p) => p.playerId === id)?.displayName))
+    .filter(Boolean)
+    .join(' & ')
+  /** Trophy on a co-winner too — they won it, just not alone. */
+  const isVictor = (playerId: string) => playerId === winnerId || coWinnerIds.includes(playerId)
 
   const handlePlayAgain = () => {
     startSession(players.length as 2 | 3 | 4)
@@ -39,12 +51,21 @@ export default function BotResultScreen() {
     <PaperBackground>
       <View style={styles.container}>
         <NewsCard style={styles.resultCard}>
-          {isDraw ? (
+          {isExhausted ? (
             <>
               <MaterialCommunityIcons name="handshake-outline" size={52} color={colors.inkFaded} />
               <Text style={styles.kicker}>Practice Edition</Text>
               <Text style={styles.resultTitle}>No Winner</Text>
-              <Text style={styles.resultSubtitle}>It&apos;s a draw — all 25 numbers called!</Text>
+              <Text style={styles.resultSubtitle}>All 25 numbers called and nobody reached five.</Text>
+            </>
+          ) : isSharedWin ? (
+            <>
+              <MaterialCommunityIcons name="handshake-outline" size={52} color={colors.accent} />
+              <Text style={styles.kicker}>Practice Edition</Text>
+              <Text style={styles.resultTitle}>{sharedWithYou ? 'You Both Win!' : 'Shared Victory'}</Text>
+              <Text style={styles.resultSubtitle}>
+                {coWinnerNames} reached five on call {winningCall} — a draw.
+              </Text>
             </>
           ) : isWinner ? (
             <>
@@ -72,7 +93,7 @@ export default function BotResultScreen() {
               <View style={styles.scoreRow}>
                 <View style={styles.scoreLabelRow}>
                   <Text style={styles.scoreLabel}>{p.displayName}</Text>
-                  {p.playerId === winnerId ? <Ionicons name="trophy" size={14} color={colors.accent} /> : null}
+                  {isVictor(p.playerId) ? <Ionicons name="trophy" size={14} color={colors.accent} /> : null}
                 </View>
                 <Text style={styles.scoreValue}>{scoreMap[p.playerId] ?? 0} lines</Text>
               </View>
@@ -101,7 +122,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
     color: colors.inkFaded, marginTop: spacing.sm,
   },
-  resultTitle: { fontFamily: fonts.displayHeavy, fontSize: 32, color: colors.ink },
+  resultTitle: { fontFamily: fonts.display, fontSize: 32, color: colors.ink },
   resultSubtitle: { fontFamily: fonts.bodyItalic, fontSize: 15, color: colors.inkFaded, textAlign: 'center' },
   scoresContainer: { gap: spacing.xs },
   scoresTitle: {

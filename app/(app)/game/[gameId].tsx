@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
   turnText: {
     fontFamily: fonts.display, fontSize: 18, color: colors.inkFaded,
   },
-  turnTextActive: { fontFamily: fonts.displayHeavy, color: colors.accent },
+  turnTextActive: { fontFamily: fonts.display, color: colors.accent },
   turnRule: { marginHorizontal: spacing.lg },
   forfeitBox: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
   forfeitText: {

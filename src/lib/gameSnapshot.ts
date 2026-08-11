@@ -43,5 +43,15 @@ export function applyGameSnapshot(snapshot: any): void {
       snapshot.winner_id ?? null,
       snapshot.winning_call ?? null
     )
+
+    // games.winner_id alone cannot express a shared victory — it is NULL for
+    // one. The co-winner list lives on the game_results row, which the snapshot
+    // carries, so a DRAW is only legible once this has been applied.
+    if (snapshot.result) {
+      useGameStore.getState().setGameResult({
+        outcome: snapshot.result.outcome,
+        coWinnerIds: snapshot.result.co_winner_ids ?? [],
+      })
+    }
   }
 }

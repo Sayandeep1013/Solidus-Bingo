@@ -161,6 +161,19 @@ export function useRealtimeEvents(gameId: string | null) {
           record.winner_id ?? null,
           record.winning_call ?? null
         )
+
+        // A shared victory reaches us as FINISHED with winner_id NULL, because
+        // one uuid column cannot name several winners. The co-winner list lives
+        // on game_results, which this subscription does not carry — without
+        // refetching, every co-winner would be shown a defeat. ABANDONED is not
+        // caught here: it has its own status and genuinely has no winners.
+        if (record.status === 'FINISHED' && record.winner_id == null) {
+          fetchSnapshot(record.id).catch((err) => {
+            useConnectionStore.getState().setSnapshotError(
+              err instanceof Error ? err.message : 'Snapshot fetch failed'
+            )
+          })
+        }
         break
       }
 

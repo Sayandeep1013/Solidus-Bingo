@@ -126,7 +126,7 @@ Deno.serve(async (req: Request) => {
     // Game result if finished
     admin
       .from('game_results')
-      .select('outcome, winner_id, final_scores, total_calls')
+      .select('outcome, winner_id, co_winner_ids, final_scores, total_calls')
       .eq('game_id', gameId)
       .maybeSingle(),
   ])

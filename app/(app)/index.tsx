@@ -112,13 +112,7 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Bottom inset added to the scroll padding, not baked into the style:
-          the colophon is the last thing on the page and was rendering under the
-          gesture bar, so the wordmark came out sliced in half. */}
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
-      >
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         {activeGame ? (
           <View style={styles.noticeOuter}>
             <View style={styles.noticeInner}>
@@ -272,7 +266,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingBottom: spacing.sm },
   container: { flex: 1 },
-  content: { paddingHorizontal: 24, paddingTop: spacing.lg, gap: spacing.xl },
+  // No bottom inset here — PaperBackground applies it for every screen.
+  content: { paddingHorizontal: 24, paddingTop: spacing.lg, paddingBottom: spacing.xl, gap: spacing.xl },
   noticeOuter: {
     borderWidth: 2.5,
     borderColor: colors.ink,

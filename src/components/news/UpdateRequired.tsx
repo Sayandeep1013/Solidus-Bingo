@@ -38,7 +38,7 @@ export function UpdateRequired({
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl },
+          { paddingTop: insets.top + spacing.xl },
         ]}
       >
         <Masthead
@@ -86,7 +86,7 @@ export function UpdateRequired({
 }
 
 const styles = StyleSheet.create({
-  content: { flexGrow: 1, paddingHorizontal: 24, gap: spacing.xl },
+  content: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: spacing.xl, gap: spacing.xl },
   body: { gap: spacing.sm },
   kicker: {
     fontFamily: fonts.bodyBold,
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     letterSpacing: KICKER_LETTER_SPACING,
     color: colors.accent,
   },
-  headline: { fontFamily: fonts.displayHeavy, fontSize: 28, color: colors.ink },
+  headline: { fontFamily: fonts.display, fontSize: 28, color: colors.ink },
   copy: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.inkFaded },
   rule: { marginVertical: spacing.sm },
   versionRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },

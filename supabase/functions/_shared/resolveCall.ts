@@ -290,23 +290,25 @@ export async function resolveCall(
   }
 
   // ── Win check ─────────────────────────────────────────────────────────────
-  // The winner is the player whose own board reached 5 lines — NOT whoever
-  // happened to call the number (spec bingo-game-mechanics §4.3–4.4). Every
-  // call is cut on every board simultaneously, so a call routinely completes
-  // an opponent's board; the old caller-wins rule then produced results like
-  // "Bot Ada wins — You: 5 lines, Bot Ada: 3 lines".
+  // MIRRORS src/lib/gameEngine.ts resolveOutcome(), which is exhaustively
+  // tested against the E1-E12 table in bingo-game-mechanics §5. Deno cannot
+  // import from src/, so the logic is duplicated by hand — if the rule changes
+  // there it must change here in the same commit.
   //
-  // Tie-break, for the rare call that pushes two players to 5 at once: the
-  // caller wins if they are one of them, otherwise the lowest turn_order does.
-  // Both branches are pure functions of this call's inputs, so replaying the
-  // same call always names the same winner.
+  // Everyone at the threshold is collected before deciding anything. A called
+  // number is cut on every board at once, so it routinely completes the fifth
+  // line for more than one player at the same instant, and there is no ordering
+  // between those completions to break the tie with. Several players at 5 is a
+  // shared victory (DRAW); exactly one is a WINNER, whoever called the number.
   //
   // is_out players are excluded. Boards are scored for everyone regardless of
   // whether that seat has forfeited or timed out, so a player who has left can
-  // and does keep completing lines — under the old caller-wins rule that could
-  // never name them the winner (the caller is by definition still in), and it
-  // must not start doing so now.
-  const winners = (gamePlayers ?? [])
+  // and does keep completing lines — they must never be named a winner or a
+  // co-winner (E7/E8).
+  //
+  // Sorted by turn_order so a replay of the same call records an identical
+  // co-winner array (§5.5).
+  const reachedThreshold: string[] = (gamePlayers ?? [])
     .filter(
       (gp: { player_id: string; is_out?: boolean }) =>
         !gp.is_out && (updatedScores[gp.player_id] ?? 0) >= 5
@@ -314,11 +316,68 @@ export async function resolveCall(
     .sort((a: { turn_order: number }, b: { turn_order: number }) => a.turn_order - b.turn_order)
     .map((gp: { player_id: string }) => gp.player_id)
 
-  if (winners.length > 0) {
+  // ── Draw path — several players got there on this same call (§5.4) ────────
+  if (reachedThreshold.length > 1) {
+    await admin
+      .from('games')
+      .update({
+        active_player_id: null,
+        // Nobody won it alone. Clients read the co-winner list from the result.
+        winner_id: null,
+        winning_call: calledNumber,
+        status: 'FINISHED',
+        finished_at: new Date().toISOString(),
+      })
+      .eq('id', gameId)
+
+    await admin.from('game_results').insert({
+      game_id: gameId,
+      winner_id: null,
+      outcome: 'DRAW',
+      co_winner_ids: reachedThreshold,
+      final_scores: updatedScores,
+      total_calls: callSequence,
+    })
+
+    await admin
+      .from('rooms')
+      .update({ status: 'GAME_FINISHED' })
+      .eq('id', game.room_id)
+
+    if (isRanked) {
+      // Each co-winner is credited with a win; everyone else takes the loss
+      // (§5.6). games_played still increments exactly once per player — a
+      // shared victory is one game each, not one game per winner.
+      await finalizeRankedStats(
+        admin,
+        Object.keys(updatedScores),
+        reachedThreshold,
+        room.capacity
+      )
+    }
+
+    return {
+      ok: true,
+      data: {
+        called_number: calledNumber,
+        sequence: callSequence,
+        game_status: 'FINISHED',
+        winner_id: null,
+        co_winner_ids: reachedThreshold,
+        outcome: 'DRAW',
+        winning_call: calledNumber,
+        next_active_player_id: null,
+        newly_completed_lines: newlyCompletedLines,
+        updated_scores: updatedScores,
+      },
+    }
+  }
+
+  if (reachedThreshold.length === 1) {
     // Win Path — the winner is resolved BEFORE any UPDATE runs, so nulling
     // active_player_id below can never corrupt the recorded winner
     // (spec bingo-edge-functions §22a).
-    const captured_winner_id = winners.includes(callerId) ? callerId : winners[0]
+    const captured_winner_id = reachedThreshold[0]
 
     await admin
       .from('games')

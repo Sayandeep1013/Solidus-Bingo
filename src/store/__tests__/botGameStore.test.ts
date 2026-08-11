@@ -73,7 +73,7 @@ describe('botGameStore — win attribution', () => {
     expect(s.winningCall).toBe(21)
   })
 
-  test('a call that pushes both players to 5 at once goes to the caller', () => {
+  test('a call that pushes both players to 5 at once is a shared victory, not the caller\'s', () => {
     useBotGameStore.setState({
       players: PLAYERS,
       boards: { [HUMAN_PLAYER_ID]: ORDERED_BOARD, [BOT_ID]: ORDERED_BOARD },
@@ -92,7 +92,46 @@ describe('botGameStore — win attribution', () => {
     expect(s.status).toBe('FINISHED')
     expect(s.scoreMap[HUMAN_PLAYER_ID]).toBe(6)
     expect(s.scoreMap[BOT_ID]).toBe(6)
-    expect(s.winnerId).toBe(BOT_ID)
+    expect(s.outcome).toBe('DRAW')
+    // Nobody won it alone, so there is no winner to name.
+    expect(s.winnerId).toBeNull()
+    // Turn order, so a replay records the same set (spec §5.5).
+    expect(s.coWinnerIds).toEqual([HUMAN_PLAYER_ID, BOT_ID])
+  })
+
+  test('in a 3-player practice game, two reaching 5 draw and the third is defeated', () => {
+    const BOT_2 = 'bot-2'
+    const three: BotSeat[] = [
+      ...PLAYERS,
+      { playerId: BOT_2, displayName: 'Bot Turing', isBot: true, turnOrder: 3 },
+    ]
+
+    useBotGameStore.setState({
+      players: three,
+      boards: {
+        [HUMAN_PLAYER_ID]: ORDERED_BOARD,
+        [BOT_ID]: ORDERED_BOARD,
+        [BOT_2]: SPARSE_BOARD,
+      },
+      calledNumbers: CALLED_1_TO_20,
+      scoreMap: { [HUMAN_PLAYER_ID]: 4, [BOT_ID]: 4, [BOT_2]: 0 },
+      completedLines: [...linesFor(HUMAN_PLAYER_ID), ...linesFor(BOT_ID)],
+      activePlayerId: BOT_2,
+      winnerId: null,
+      coWinnerIds: [],
+      outcome: null,
+      winningCall: null,
+      status: 'ACTIVE',
+    })
+
+    // Called by the one player who does NOT reach 5 — they get nothing for it.
+    useBotGameStore.getState().callNumber(BOT_2, 21)
+
+    const s = useBotGameStore.getState()
+    expect(s.outcome).toBe('DRAW')
+    expect(s.coWinnerIds).toEqual([HUMAN_PLAYER_ID, BOT_ID])
+    expect(s.scoreMap[BOT_2]).toBe(2)
+    expect(s.winnerId).toBeNull()
   })
 
   test('calling your own winning number still wins it', () => {
