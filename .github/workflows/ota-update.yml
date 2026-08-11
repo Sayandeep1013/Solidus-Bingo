@@ -110,6 +110,17 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # `eas update` creates a BRANCH. Devices ask for a CHANNEL, and nothing
+      # here had ever created one: EAS Build normally does it, and these APKs
+      # are built by Gradle on GitHub instead. Every publish therefore succeeded
+      # while every device got back "There is no channel named production for
+      # the app" and silently kept running its embedded bundle. Idempotent, so
+      # it is safe on every run.
+      - name: Ensure the channel exists and points at the branch
+        run: |
+          BRANCH="${{ github.event.inputs.branch || 'production' }}"
+          eas channel:create "$BRANCH" --non-interactive             || eas channel:edit "$BRANCH" --branch "$BRANCH" --non-interactive             || true
+
       - name: Publish update
         run: |
           MSG="${{ github.event.inputs.message }}"
