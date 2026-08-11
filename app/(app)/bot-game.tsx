@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
   turnDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.inkFaint },
   turnDotActive: { backgroundColor: colors.accent },
   turnText: {
-    fontFamily: fonts.headlineBold, fontSize: 18, color: colors.inkFaded,
+    fontFamily: fonts.display, fontSize: 18, color: colors.inkFaded,
   },
-  turnTextActive: { fontFamily: fonts.headlineBlack, color: colors.accent },
+  turnTextActive: { fontFamily: fonts.displayHeavy, color: colors.accent },
   turnRule: { marginHorizontal: spacing.lg },
   boardContainer: { padding: spacing.lg, paddingTop: spacing.xl, alignItems: 'center' },
   boardCard: {

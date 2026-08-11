@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
     color: colors.inkFaded, marginTop: spacing.sm,
   },
-  resultTitle: { fontFamily: fonts.headlineBlack, fontSize: 36, color: colors.ink },
+  resultTitle: { fontFamily: fonts.displayHeavy, fontSize: 36, color: colors.ink },
   resultSubtitle: { fontFamily: fonts.bodyItalic, fontSize: 15, color: colors.inkFaded, textAlign: 'center' },
   scoresContainer: { gap: spacing.xs },
   scoresTitle: {

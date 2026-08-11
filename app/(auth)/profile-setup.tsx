@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   title: {
-    fontFamily: fonts.headlineBold,
+    fontFamily: fonts.display,
     fontSize: 30,
     color: colors.ink,
     marginTop: spacing.xs,

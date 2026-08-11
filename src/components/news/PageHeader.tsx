@@ -43,6 +43,6 @@ const styles = StyleSheet.create({
   container: { paddingHorizontal: 24, paddingBottom: 12, gap: 8 },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   backText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.accent },
-  title: { fontFamily: fonts.headlineBold, fontSize: 26, color: colors.ink },
+  title: { fontFamily: fonts.display, fontSize: 26, color: colors.ink },
   rule: { marginTop: 4 },
 })

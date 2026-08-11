@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   disconnectedTitle: {
-    fontFamily: fonts.headlineBold,
+    fontFamily: fonts.display,
     fontSize: 22,
     color: colors.ink,
   },

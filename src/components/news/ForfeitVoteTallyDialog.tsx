@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 2.2, color: colors.accent,
   },
-  title: { fontFamily: fonts.headlineBold, fontSize: 21, color: colors.ink },
+  title: { fontFamily: fonts.display, fontSize: 21, color: colors.ink },
   message: { fontFamily: fonts.body, fontSize: 13, color: colors.inkFaded, lineHeight: 19 },
   tallyRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',

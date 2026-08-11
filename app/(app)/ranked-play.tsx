@@ -219,6 +219,6 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING,
     color: colors.inkFaded, marginTop: spacing.md,
   },
-  searchingTitle: { fontFamily: fonts.headlineBold, fontSize: 22, color: colors.ink, marginTop: spacing.xs },
+  searchingTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.ink, marginTop: spacing.xs },
   searchingSubtitle: { fontFamily: fonts.bodyItalic, fontSize: 14, color: colors.inkFaded },
 })

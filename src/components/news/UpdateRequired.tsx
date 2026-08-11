@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     letterSpacing: KICKER_LETTER_SPACING,
     color: colors.accent,
   },
-  headline: { fontFamily: fonts.headlineBlack, fontSize: 28, color: colors.ink },
+  headline: { fontFamily: fonts.displayHeavy, fontSize: 28, color: colors.ink },
   copy: { fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.inkFaded },
   rule: { marginVertical: spacing.sm },
   versionRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },

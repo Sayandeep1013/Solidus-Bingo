@@ -21,7 +21,7 @@ import { useRoomStore } from '@/store/roomStore'
 import { invokeEdgeFunction } from '@/lib/invokeEdgeFunction'
 import { applyGameSnapshot } from '@/lib/gameSnapshot'
 import { colors, fonts, spacing, radius, KICKER_LETTER_SPACING } from '@/theme'
-import { Masthead, PaperBackground, NewsButton, NewsCard, SectionLabel, Divider } from '@/components/news'
+import { Masthead, PaperBackground, NewsButton, NewsCard, SectionLabel, Divider, ConfirmDialog } from '@/components/news'
 
 interface ActiveGame { room_id: string; game_id: string; capacity: number }
 interface UnseenResult { room_id: string; game_id: string; capacity: number; outcome: 'WON' | 'LOST' | 'DRAW' }
@@ -41,6 +41,11 @@ export default function HomeScreen() {
   const [unseenResult, setUnseenResult] = useState<UnseenResult | null>(null)
   const [isResuming, setIsResuming] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
+  // Signing out is a one-tap way to lose your session from a footer link sat
+  // right under the page — worth a confirm, and one that looks like the rest of
+  // the paper rather than the OS's own blue-buttoned Alert.
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
   const loadStatus = useCallback(async () => {
     const { data } = await invokeEdgeFunction('get-my-status', { body: {} })
@@ -97,7 +102,9 @@ export default function HomeScreen() {
       {/* Fixed header — never affected by scroll position, so the masthead
           can't ever render mid-clipped the way it could when it scrolled
           together with the rest of the page. */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
+      {/* The nameplate sits well below the status bar — a front page gives its
+          own name air above it rather than butting it against the notch. */}
+      <View style={[styles.header, { paddingTop: insets.top + spacing.xxl }]}>
         <Masthead
           kicker={`Reader: ${profile?.username ?? 'Player'}`}
           title="Solidus Bingo"
@@ -213,12 +220,15 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Divider thick />
-          <Text style={styles.footerWordmark}>SOLIDUS BINGO</Text>
+          {/* Stub rule, not the full-width one that used to sit here — edge to
+              edge reads as another section boundary, when what the colophon
+              wants is an ornamental break. */}
+          <Divider thick short />
+          <Text style={styles.footerWordmark}>Solidus Bingo</Text>
           <Text style={styles.footerTagline}>Printed for Friends &amp; Family · Est. 2026</Text>
           <TouchableOpacity
             style={styles.signOutButton}
-            onPress={signOut}
+            onPress={() => setConfirmSignOut(true)}
             accessibilityRole="button"
             accessibilityLabel="Sign out"
           >
@@ -226,6 +236,29 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ConfirmDialog
+        visible={confirmSignOut}
+        kicker="Cancel Subscription"
+        title="Sign out of Solidus Bingo?"
+        message="You'll be returned to the login page. Your results, standings and username all stay exactly as they are — signing back in picks up where you left off."
+        confirmLabel="Sign Out"
+        cancelLabel="Stay"
+        isConfirming={isSigningOut}
+        onCancel={() => setConfirmSignOut(false)}
+        onConfirm={async () => {
+          setIsSigningOut(true)
+          try {
+            await signOut()
+          } finally {
+            // AuthContext clears the session either way, so this screen is on
+            // its way out; resetting anyway keeps the dialog from being left
+            // spinning if the redirect is ever slower than the sign-out.
+            setIsSigningOut(false)
+            setConfirmSignOut(false)
+          }
+        }}
+      />
     </PaperBackground>
   )
 }
@@ -249,7 +282,7 @@ const styles = StyleSheet.create({
   noticeKicker: {
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: KICKER_LETTER_SPACING, color: colors.accent,
   },
-  noticeTitle: { fontFamily: fonts.headlineBold, fontSize: 20, color: colors.ink },
+  noticeTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.ink },
   noticeSubtitle: { fontFamily: fonts.body, fontSize: 13, color: colors.inkFaded },
   noticeActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   awayCard: { gap: spacing.xs },
@@ -271,7 +304,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   leadStoryHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  leadStoryTitle: { fontFamily: fonts.headlineBold, fontSize: 24, color: colors.accent },
+  leadStoryTitle: { fontFamily: fonts.display, fontSize: 24, color: colors.accent },
   leadStorySubtitle: { fontFamily: fonts.bodyItalic, fontSize: 13, color: colors.inkFaded },
   leadStoryFooter: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: spacing.xs },
   leadStoryPlayButton: {
@@ -291,7 +324,9 @@ const styles = StyleSheet.create({
   leaderboardText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
   footer: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxl },
   footerWordmark: {
-    fontFamily: fonts.masthead, fontSize: 16, letterSpacing: 1, color: colors.inkFaded, marginTop: spacing.sm,
+    fontFamily: fonts.nameplate, fontSize: 24, letterSpacing: 0,
+    color: colors.inkFaded, marginTop: spacing.sm, lineHeight: 32,
+    includeFontPadding: false,
   },
   footerTagline: { fontFamily: fonts.bodyItalic, fontSize: 12, color: colors.inkFaint },
   signOutButton: { alignItems: 'center', paddingVertical: spacing.xs, marginTop: spacing.xs },

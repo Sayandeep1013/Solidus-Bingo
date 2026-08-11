@@ -13,7 +13,11 @@ import { Stack } from 'expo-router'
 import * as Linking from 'expo-linking'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFonts } from 'expo-font'
-import { Anton_400Regular } from '@expo-google-fonts/anton'
+import { UnifrakturMaguntia_400Regular } from '@expo-google-fonts/unifrakturmaguntia'
+import {
+  GrenzeGotisch_700Bold,
+  GrenzeGotisch_800ExtraBold,
+} from '@expo-google-fonts/grenze-gotisch'
 import {
   PlayfairDisplay_700Bold,
   PlayfairDisplay_700Bold_Italic,
@@ -41,7 +45,9 @@ SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Anton_400Regular,
+    UnifrakturMaguntia_400Regular,
+    GrenzeGotisch_700Bold,
+    GrenzeGotisch_800ExtraBold,
     PlayfairDisplay_900Black,
     PlayfairDisplay_700Bold,
     PlayfairDisplay_700Bold_Italic,

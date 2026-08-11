@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   kicker: {
     fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 2.2, color: colors.accent,
   },
-  title: { fontFamily: fonts.headlineBold, fontSize: 22, color: colors.ink },
+  title: { fontFamily: fonts.display, fontSize: 22, color: colors.ink },
   message: { fontFamily: fonts.body, fontSize: 14, color: colors.inkFaded, lineHeight: 20 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   actionHalf: { flex: 1 },
