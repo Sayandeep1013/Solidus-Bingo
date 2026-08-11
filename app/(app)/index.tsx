@@ -323,13 +323,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14, paddingHorizontal: spacing.md,
   },
   leaderboardText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.ink },
-  footer: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxl },
+  // Tuned so the page comes to rest with the wordmark whole and everything
+  // below it past the fold — the colophon reads as a printed sign-off you can
+  // see, and the tagline/Sign Out are a deliberate reward for scrolling.
+  //
+  // This is a measured fit, not a guarantee: where the fold falls depends on
+  // content height, so a much taller or shorter screen, or the "game in
+  // progress" notice appearing at the top, will shift it. The generous gap
+  // below the wordmark is what buys the tolerance — it keeps the tagline well
+  // clear of the fold instead of hovering a pixel under it.
+  footer: { alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
   footerWordmark: {
     fontFamily: fonts.nameplate, fontSize: 24, letterSpacing: 0,
     color: colors.inkFaded, marginTop: spacing.sm, lineHeight: 32,
     includeFontPadding: false,
   },
-  footerTagline: { fontFamily: fonts.bodyItalic, fontSize: 12, color: colors.inkFaint },
+  footerTagline: {
+    fontFamily: fonts.bodyItalic, fontSize: 12, color: colors.inkFaint,
+    marginTop: spacing.lg,
+  },
   signOutButton: { alignItems: 'center', paddingVertical: spacing.xs, marginTop: spacing.xs },
   signOutText: { fontFamily: fonts.body, color: colors.inkFaded, fontSize: 13, fontStyle: 'italic' },
 })

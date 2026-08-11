@@ -1,0 +1,114 @@
+# .github/workflows/deploy-functions.yml
+#
+# Deploys the Supabase Edge Functions straight from this repo.
+#
+# WHY THIS EXISTS
+#
+# Until now the functions were deployed by hand, by copying each file's source
+# into a deploy call one at a time. Every deploy meant re-transcribing ~900
+# lines across five files, and it went wrong twice — once shipping a literal
+# "PLACEHOLDER" as get-game-state's entrypoint, which broke the function in
+# production until it was caught. The repo is the source of truth; nothing
+# should be retyped to get it deployed.
+#
+# It also fixes a subtler hazard. call-number and submit-bot-move share
+# _shared/resolveCall.ts, so a change there has to reach both or the two
+# disagree about who won a game. Deploying every function from one command
+# makes that impossible to half-do.
+#
+# SETUP (once)
+#
+#   1. Create a Supabase access token:
+#        https://supabase.com/dashboard/account/tokens  ->  "Generate new token"
+#      Name it something like "github-actions". Copy it — it is shown once.
+#
+#   2. Add it to this repo as a secret:
+#        Settings -> Secrets and variables -> Actions -> New repository secret
+#        Name:   SUPABASE_ACCESS_TOKEN
+#        Value:  the token from step 1
+#
+# That token can administer the Supabase project, so it belongs in repo secrets
+# and nowhere else — never in eas.json or app.json, which are committed.
+#
+# USE
+#
+#   Actions -> Deploy Edge Functions -> Run workflow.
+#   Leave `functions` empty to deploy all of them, or name specific ones
+#   (space-separated) to deploy just those.
+
+name: Deploy Edge Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Space-separated function names, or empty for all'
+        required: false
+        default: ''
+
+env:
+  SUPABASE_PROJECT_REF: jvediwzzvcqttnwdgsry
+
+jobs:
+  deploy:
+    name: Deploy to Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pinned rather than "latest" for the same reason test.yml pins it:
+          # resolving "latest" hits GitHub's release API unauthenticated and has
+          # already failed this pipeline once on a rate limit.
+          version: 2.113.0
+
+      - name: Fail early if the token is missing
+        # Without this the deploy fails deep inside the CLI with an opaque auth
+        # error, which reads like a code problem rather than a missing secret.
+        run: |
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is not set."
+            echo "See the setup notes at the top of this workflow file."
+            exit 1
+          fi
+
+      - name: Deploy
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARGETS="${{ github.event.inputs.functions }}"
+
+          if [ -z "$TARGETS" ]; then
+            echo "Deploying all functions"
+            supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+          else
+            for fn in $TARGETS; do
+              echo "Deploying $fn"
+              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            done
+          fi
+
+      - name: Smoke test
+        # A deployed function can still fail to boot — a missing shared file
+        # takes the whole module graph down. An unauthenticated call should come
+        # back as our own JSON error envelope; anything else means it did not
+        # start. This is the check that would have caught the PLACEHOLDER.
+        run: |
+          set -uo pipefail
+          FAILED=0
+          for fn in call-number submit-bot-move get-game-state get-my-status; do
+            CODE=$(curl -s -o /tmp/body.json -w '%{http_code}' -X POST \
+              "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/$fn" \
+              -H "Content-Type: application/json" -d '{}')
+            BODY=$(cat /tmp/body.json)
+            if echo "$BODY" | grep -q '"error"'; then
+              echo "ok    $fn (HTTP $CODE) — booted and returned our envelope"
+            else
+              echo "FAIL  $fn (HTTP $CODE) — $BODY"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
