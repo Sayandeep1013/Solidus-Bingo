@@ -220,10 +220,11 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.footer}>
-          {/* Stub rule, not the full-width one that used to sit here — edge to
-              edge reads as another section boundary, when what the colophon
-              wants is an ornamental break. */}
-          <Divider thick short />
+          {/* Same hairline weight as the section rules above, so it belongs to
+              the same page — just centred and inset rather than running edge to
+              edge, which would read as another section boundary instead of the
+              ornamental break a colophon wants. */}
+          <Divider short />
           <Text style={styles.footerWordmark}>Solidus Bingo</Text>
           <Text style={styles.footerTagline}>Printed for Friends &amp; Family · Est. 2026</Text>
           <TouchableOpacity

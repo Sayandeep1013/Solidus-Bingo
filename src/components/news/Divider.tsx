@@ -33,6 +33,9 @@ const styles = StyleSheet.create({
   thickLine: { height: 3, backgroundColor: colors.rule },
   doubleGap: { marginTop: 3 },
   doubleGapThick: { marginTop: 4 },
-  short: { width: 88, alignSelf: 'center' },
+  // Long enough to read as the same rule as the section ones under PRIVATE
+  // ROOM / PRACTICE / STANDINGS, just centred and inset instead of running the
+  // full column. At 88px it was a short fat dash and sat oddly against them.
+  short: { width: 220, alignSelf: 'center' },
   shortWrap: { alignSelf: 'center' },
 })
