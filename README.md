@@ -1,6 +1,12 @@
 # Solidus Bingo
 
-A real-time multiplayer Bingo game — Expo/React Native app backed by Supabase.
+A real-time multiplayer Bingo game — Expo/React Native app backed by Supabase. Play ranked with auto-matchmaking, host or join a private room, or practice against bots; every ranked result feeds the leaderboard.
+
+## Screenshots
+
+| Home | Live board | Results | Leaderboard |
+|---|---|---|---|
+| ![Home — ranked, private room, practice](screenshots/readme/01-home.png) | ![4-player board mid-game](screenshots/readme/02-board.png) | ![Results screen with final scores](screenshots/readme/03-results.png) | ![Leaderboard, most wins](screenshots/readme/04-leaderboard.png) |
 
 ## Stack
 - Frontend: Expo (React Native), Expo Router, TypeScript, Zustand
